@@ -75,10 +75,14 @@
         </div>
 
         <!-- 模块 1: 数据看板 -->
-        <div id="dashboard" class="tab-content active bg-white rounded-xl shadow-sm overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full text-center border-collapse">
-                    <thead class="bg-gray-100 text-gray-700"><tr id="dashboardHeader"></tr></thead>
+        <div id="dashboard" class="tab-content active bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+            <!-- 增加 max-h-[70vh] 和 overflow-y-auto，让表格在内部滚动 -->
+            <div class="overflow-x-auto overflow-y-auto max-h-[70vh]">
+                <table class="w-full text-center border-collapse relative">
+                    <!-- 增加 sticky top-0 z-20 让表头吸顶 -->
+                    <thead class="bg-gray-200 text-gray-800 sticky top-0 z-20 shadow-sm">
+                        <tr id="dashboardHeader"></tr>
+                    </thead>
                     <tbody id="dashboardBody" class="divide-y divide-gray-200"></tbody>
                 </table>
             </div>
@@ -122,9 +126,10 @@
                 </div>
             </div>
             <h3 class="font-bold text-lg mb-3 border-l-4 border-gray-400 pl-2">参赛记录明细</h3>
-            <div class="overflow-x-auto">
-                <table class="w-full text-center border-collapse">
-                    <thead class="bg-gray-100"><tr><th class="py-2">日期</th><th class="py-2">得分</th><th class="py-2">结果</th></tr></thead>
+            <!-- 同样为详情表格增加内部滚动和表头吸顶 -->
+            <div class="overflow-x-auto overflow-y-auto max-h-[50vh] border border-gray-100 rounded-lg">
+                <table class="w-full text-center border-collapse relative">
+                    <thead class="bg-gray-100 sticky top-0 z-10 shadow-sm"><tr><th class="py-2">日期</th><th class="py-2">得分</th><th class="py-2">结果</th></tr></thead>
                     <tbody id="userDetailBody" class="divide-y divide-gray-200"></tbody>
                 </table>
             </div>
@@ -276,7 +281,6 @@
         }
 
         // ================= 辅助函数：获取排序后的用户列表 =================
-        // 规则：参与排名的用户在前，不参与排名的用户在后
         function getSortedUsers() {
             const activeUsers = allData.users.filter(u => u.participateInRanking);
             const inactiveUsers = allData.users.filter(u => !u.participateInRanking);
@@ -422,11 +426,10 @@
             const header = document.getElementById('dashboardHeader');
             const body = document.getElementById('dashboardBody');
             
-            // 使用排序后的用户列表渲染看板
             const displayUsers = getSortedUsers();
             
-            let headerHtml = `<th class="py-3 px-4 border-b">日期</th>`;
-            displayUsers.forEach(u => { headerHtml += `<th class="py-3 px-4 border-b">${u.name}</th>`; });
+            let headerHtml = `<th class="py-3 px-4 border-b border-gray-300">日期</th>`;
+            displayUsers.forEach(u => { headerHtml += `<th class="py-3 px-4 border-b border-gray-300">${u.name}</th>`; });
             header.innerHTML = headerHtml;
 
             let maxScore = -Infinity, minScore = Infinity;
@@ -449,26 +452,27 @@
 
             let bodyHtml = '';
             currentData.forEach(record => {
-                bodyHtml += `<tr class="hover:bg-gray-50 transition-colors"><td class="py-3 px-4 border-b font-medium text-gray-600">${record.date}</td>`;
+                bodyHtml += `<tr class="hover:bg-gray-50 transition-colors"><td class="py-3 px-4 border-b border-gray-200 font-medium text-gray-600">${record.date}</td>`;
                 displayUsers.forEach(u => {
                     const score = record.scores[u.name];
                     if (score !== undefined) {
                         const styleClass = getScoreClass(score, maxScore, minScore, u.participateInRanking);
                         const innerSpan = (styleClass.includes('bg-')) ? `<span class="${styleClass} px-2 py-1 rounded shadow-sm">${score > 0 ? '+'+score : score}</span>` : `<span class="${styleClass}">${score > 0 ? '+'+score : score}</span>`;
-                        bodyHtml += `<td class="py-3 px-4 border-b">${innerSpan}</td>`;
+                        bodyHtml += `<td class="py-3 px-4 border-b border-gray-200">${innerSpan}</td>`;
                     } else {
-                        bodyHtml += `<td class="py-3 px-4 border-b text-gray-300">-</td>`;
+                        bodyHtml += `<td class="py-3 px-4 border-b border-gray-200 text-gray-300">-</td>`;
                     }
                 });
                 bodyHtml += `</tr>`;
             });
             
             if(currentData.length > 0) {
-                bodyHtml += `<tr class="bg-blue-50/50 font-bold hover:bg-blue-100/50 transition-colors"><td class="py-3 px-4 border-b text-gray-800">总计</td>`;
+                // 修改点：增加 sticky bottom-0 z-20 让总计行吸底，并加上阴影区分边界
+                bodyHtml += `<tr class="bg-blue-50 font-bold sticky bottom-0 z-20 shadow-[0_-2px_5px_rgba(0,0,0,0.05)]"><td class="py-3 px-4 border-t border-blue-200 text-gray-800">总计</td>`;
                 displayUsers.forEach(u => {
                     const totalScore = totals[u.name];
                     const textClass = totalScore > 0 ? 'text-positive' : totalScore < 0 ? 'text-negative' : 'text-zero';
-                    bodyHtml += `<td class="py-3 px-4 border-b ${textClass}">${totalScore > 0 ? '+' + totalScore : totalScore}</td>`;
+                    bodyHtml += `<td class="py-3 px-4 border-t border-blue-200 ${textClass}">${totalScore > 0 ? '+' + totalScore : totalScore}</td>`;
                 });
                 bodyHtml += `</tr>`;
             } else {
@@ -524,7 +528,6 @@
             const currentVal = select.value;
             select.innerHTML = '';
             
-            // 使用排序后的用户列表渲染下拉框
             const displayUsers = getSortedUsers();
             
             displayUsers.forEach(u => { select.innerHTML += `<option value="${u.name}">${u.name}</option>`; });
@@ -562,7 +565,7 @@
                     const innerSpan = (styleClass.includes('bg-')) ? `<span class="${styleClass} px-2 py-1 rounded shadow-sm">${score > 0 ? '+'+score : score}</span>` : `<span class="${styleClass}">${score > 0 ? '+'+score : score}</span>`;
                     const resultTag = score > 0 ? `<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs">胜</span>` : score < 0 ? `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">负</span>` : `<span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">平</span>`;
 
-                    detailHtml += `<tr class="hover:bg-gray-50"><td class="py-3 text-gray-600">${record.date}</td><td class="py-3">${innerSpan}</td><td class="py-3">${resultTag}</td></tr>`;
+                    detailHtml += `<tr class="hover:bg-gray-50"><td class="py-3 border-b border-gray-200 text-gray-600">${record.date}</td><td class="py-3 border-b border-gray-200">${innerSpan}</td><td class="py-3 border-b border-gray-200">${resultTag}</td></tr>`;
                 }
             });
 

@@ -30,7 +30,8 @@ def csv_to_json(csv_file_path, json_file_path):
             for i, name in enumerate(user_names):
                 score_str = row[i+1].strip()
                 if score_str: # 确保有分数才记录
-                    scores[name.strip()] = int(score_str)
+                    if int(score_str)!=0:
+                        scores[name.strip()] = int(score_str)
             
             data["records"].append({
                 "date": date,
