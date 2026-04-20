@@ -135,7 +135,7 @@
                 </div>
             </div>
 
-            <!-- 新增：得分走势折线图容器 -->
+            <!-- 得分走势折线图容器 -->
             <div id="chartContainer" class="hidden mb-8 bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
                 <h3 class="font-bold text-lg mb-4 border-l-4 border-blue-500 pl-2 text-gray-800">📈 单局得分走势</h3>
                 <div class="relative h-64 w-full">
@@ -339,7 +339,7 @@
             let displayStr = "";
 
             if (filter === 'all') {
-                currentData = allData.records;
+                currentData = [...allData.records];
                 displayStr = "全部历史记录";
             } else if (filter === 'thisMonth') {
                 const currentYear = now.getFullYear();
@@ -395,6 +395,9 @@
                 displayStr = `${formatDateForDisplay(startCustom)} - ${formatDateForDisplay(endCustom)}`;
             }
             
+            // 【核心修改】将筛选后的数据按日期倒序排列（最新的日期在最前面）
+            currentData.sort((a, b) => parseDate(b.date) - parseDate(a.date));
+
             document.getElementById('currentDateRangeDisplay').innerText = `当前区间: ${displayStr}`;
             initUserSelect();
             renderAll();
@@ -491,6 +494,19 @@
             });
 
             let bodyHtml = '';
+            
+            // 【核心修改】将总计行放在最上面，紧贴表头
+            if(currentData.length > 0) {
+                bodyHtml += `<tr class="bg-blue-50 font-bold border-b-2 border-blue-200"><td class="py-3 px-4 text-gray-800">总计</td>`;
+                displayUsers.forEach(u => {
+                    const totalScore = totals[u.name];
+                    const textClass = totalScore > 0 ? 'text-positive' : totalScore < 0 ? 'text-negative' : 'text-zero';
+                    bodyHtml += `<td class="py-3 px-4 ${textClass}">${totalScore > 0 ? '+' + totalScore : totalScore}</td>`;
+                });
+                bodyHtml += `</tr>`;
+            }
+
+            // 之后再遍历渲染明细数据（数据已经是倒序的了）
             currentData.forEach(record => {
                 bodyHtml += `<tr class="hover:bg-gray-50 transition-colors"><td class="py-3 px-4 border-b border-gray-200 font-medium text-gray-600">${record.date}</td>`;
                 displayUsers.forEach(u => {
@@ -506,17 +522,10 @@
                 bodyHtml += `</tr>`;
             });
             
-            if(currentData.length > 0) {
-                bodyHtml += `<tr class="bg-blue-50 font-bold sticky bottom-0 z-20 shadow-[0_-2px_5px_rgba(0,0,0,0.05)]"><td class="py-3 px-4 border-t border-blue-200 text-gray-800">总计</td>`;
-                displayUsers.forEach(u => {
-                    const totalScore = totals[u.name];
-                    const textClass = totalScore > 0 ? 'text-positive' : totalScore < 0 ? 'text-negative' : 'text-zero';
-                    bodyHtml += `<td class="py-3 px-4 border-t border-blue-200 ${textClass}">${totalScore > 0 ? '+' + totalScore : totalScore}</td>`;
-                });
-                bodyHtml += `</tr>`;
-            } else {
+            if (currentData.length === 0) {
                 bodyHtml = `<tr><td colspan="${displayUsers.length + 1}" class="py-8 text-gray-400">暂无数据</td></tr>`;
             }
+            
             body.innerHTML = bodyHtml;
         }
 
@@ -659,7 +668,7 @@
                     matches += 1;
                     if (score > 0) wins += 1;
 
-                    // 收集图表数据
+                    // 收集图表数据 (因为 currentData 是倒序的，所以这里收集到的是从新到老的数据)
                     chartLabels.push(record.date);
                     chartScores.push(score);
 
@@ -686,7 +695,8 @@
             const chartContainer = document.getElementById('chartContainer');
             if (chartLabels.length > 0) {
                 chartContainer.classList.remove('hidden');
-                renderUserScoreChart(chartLabels, chartScores);
+                // 【核心修改】将倒序的数据翻转回来，确保图表是从左到右按时间顺序（老 -> 新）绘制
+                renderUserScoreChart(chartLabels.reverse(), chartScores.reverse());
             } else {
                 chartContainer.classList.add('hidden');
             }
