@@ -4,25 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>历史得分统计系统</title>
-    <!-- 引入 Tailwind CSS 用于快速美化界面 -->
+    <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* 自定义过渡动画 */
         .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
         .tab-content.active { display: block; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
         
-        /* 核心样式规则：正红负绿 */
-        .text-positive { color: #ef4444 !important; font-weight: 600; } /* Tailwind red-500 */
-        .text-negative { color: #22c55e !important; font-weight: 600; } /* Tailwind green-500 */
-        .text-zero { color: #6b7280; } /* Tailwind gray-500 */
+        .text-positive { color: #ef4444 !important; font-weight: 600; }
+        .text-negative { color: #22c55e !important; font-weight: 600; }
+        .text-zero { color: #6b7280; }
         
-        /* 核心样式规则：极值高亮 */
         .bg-max-positive { background-color: #ef4444 !important; color: #ffffff !important; font-weight: bold; }
         .bg-max-negative { background-color: #22c55e !important; color: #ffffff !important; font-weight: bold; }
+
+        /* 全局 Loading 遮罩 */
+        #loadingOverlay { display: none; }
+        #loadingOverlay.active { display: flex; }
     </style>
 </head>
-<body class="bg-gray-50 text-gray-800 font-sans">
+<body class="bg-gray-50 text-gray-800 font-sans relative min-h-screen">
+
+    <!-- 全局 Loading 遮罩 -->
+    <div id="loadingOverlay" class="absolute inset-0 bg-white/80 z-50 items-center justify-center flex-col backdrop-blur-sm">
+        <div class="animate-spin rounded-full h-12 w-12 border-4 border-blue-500 border-t-transparent mb-4"></div>
+        <p class="text-lg font-bold text-gray-700" id="loadingText">正在同步至 GitHub...</p>
+    </div>
 
     <div class="max-w-6xl mx-auto p-6">
         <!-- 头部 -->
@@ -31,7 +38,6 @@
                 <h1 class="text-3xl font-bold text-gray-800">🏆 历史得分统计系统</h1>
                 <p class="text-gray-500 mt-2 text-sm" id="globalStats">数据加载中...</p>
             </div>
-            <!-- 时间筛选器 -->
             <div class="flex items-center space-x-2">
                 <label class="text-sm font-medium text-gray-600">时间筛选:</label>
                 <select id="timeFilter" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
@@ -50,72 +56,57 @@
             <button class="tab-btn px-4 py-2 font-semibold text-gray-500 hover:text-blue-600" data-target="adminPanel">⚙️ 管理员</button>
         </div>
 
-        <!-- 模块 1: 数据看板 (Dashboard) -->
+        <!-- 模块 1: 数据看板 -->
         <div id="dashboard" class="tab-content active bg-white rounded-xl shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="w-full text-center border-collapse">
-                    <thead class="bg-gray-100 text-gray-700">
-                        <tr id="dashboardHeader"></tr>
-                    </thead>
+                    <thead class="bg-gray-100 text-gray-700"><tr id="dashboardHeader"></tr></thead>
                     <tbody id="dashboardBody" class="divide-y divide-gray-200"></tbody>
                 </table>
             </div>
         </div>
 
-        <!-- 模块 2: 排行榜 (Leaderboard) -->
+        <!-- 模块 2: 排行榜 -->
         <div id="leaderboard" class="tab-content bg-white rounded-xl shadow-sm p-6">
             <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <!-- 总分榜 -->
                 <div>
                     <h2 class="text-xl font-bold mb-4 text-gray-800 border-l-4 border-blue-500 pl-2">🔥 总分排行榜</h2>
                     <table class="w-full text-center border-collapse">
-                        <thead class="bg-blue-50 text-blue-800">
-                            <tr><th class="py-2">排名</th><th class="py-2">姓名</th><th class="py-2">总分</th></tr>
-                        </thead>
+                        <thead class="bg-blue-50 text-blue-800"><tr><th class="py-2">排名</th><th class="py-2">姓名</th><th class="py-2">总分</th></tr></thead>
                         <tbody id="scoreRankingBody" class="divide-y divide-gray-100"></tbody>
                     </table>
                 </div>
-                <!-- 胜率榜 -->
                 <div>
                     <h2 class="text-xl font-bold mb-4 text-gray-800 border-l-4 border-green-500 pl-2">📈 胜率排行榜</h2>
                     <table class="w-full text-center border-collapse">
-                        <thead class="bg-green-50 text-green-800">
-                            <tr><th class="py-2">排名</th><th class="py-2">姓名</th><th class="py-2">胜率</th><th class="py-2">胜/总场次</th></tr>
-                        </thead>
+                        <thead class="bg-green-50 text-green-800"><tr><th class="py-2">排名</th><th class="py-2">姓名</th><th class="py-2">胜率</th><th class="py-2">胜/总场次</th></tr></thead>
                         <tbody id="winRateRankingBody" class="divide-y divide-gray-100"></tbody>
                     </table>
                 </div>
             </div>
         </div>
 
-        <!-- 模块 3: 用户详情 (User Details) -->
+        <!-- 模块 3: 用户详情 -->
         <div id="userDetails" class="tab-content bg-white rounded-xl shadow-sm p-6">
             <div class="mb-6 flex items-center space-x-4">
                 <label class="font-medium text-gray-700">选择用户查看:</label>
                 <select id="userSelect" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"></select>
             </div>
-            
             <div class="grid grid-cols-3 gap-4 mb-6">
                 <div class="bg-blue-50 p-4 rounded-lg text-center">
-                    <div class="text-sm text-gray-500">累计总分</div>
-                    <div class="text-2xl font-bold text-blue-600" id="detailTotalScore">-</div>
+                    <div class="text-sm text-gray-500">累计总分</div><div class="text-2xl font-bold text-blue-600" id="detailTotalScore">-</div>
                 </div>
                 <div class="bg-gray-50 border border-gray-100 p-4 rounded-lg text-center">
-                    <div class="text-sm text-gray-500">历史胜率</div>
-                    <div class="text-2xl font-bold" id="detailWinRate">-</div>
+                    <div class="text-sm text-gray-500">历史胜率</div><div class="text-2xl font-bold" id="detailWinRate">-</div>
                 </div>
                 <div class="bg-purple-50 p-4 rounded-lg text-center">
-                    <div class="text-sm text-gray-500">参赛场次</div>
-                    <div class="text-2xl font-bold text-purple-600" id="detailMatches">-</div>
+                    <div class="text-sm text-gray-500">参赛场次</div><div class="text-2xl font-bold text-purple-600" id="detailMatches">-</div>
                 </div>
             </div>
-
             <h3 class="font-bold text-lg mb-3 border-l-4 border-gray-400 pl-2">参赛记录明细</h3>
             <div class="overflow-x-auto">
                 <table class="w-full text-center border-collapse">
-                    <thead class="bg-gray-100">
-                        <tr><th class="py-2">日期</th><th class="py-2">得分</th><th class="py-2">结果</th></tr>
-                    </thead>
+                    <thead class="bg-gray-100"><tr><th class="py-2">日期</th><th class="py-2">得分</th><th class="py-2">结果</th></tr></thead>
                     <tbody id="userDetailBody" class="divide-y divide-gray-200"></tbody>
                 </table>
             </div>
@@ -124,59 +115,78 @@
         <!-- 模块 4: 管理员 (Admin Panel) -->
         <div id="adminPanel" class="tab-content bg-white rounded-xl shadow-sm p-6">
             
-            <!-- 新增用户 -->
-            <div class="mb-8 bg-purple-50 p-5 rounded-xl border border-purple-100">
-                <h2 class="text-xl font-bold mb-4 border-l-4 border-purple-500 pl-2 text-purple-900">👤 新增用户</h2>
-                <div class="flex items-center space-x-4">
-                    <input type="text" id="newUserName" class="flex-1 border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-purple-500" placeholder="请输入新用户姓名">
-                    <button onclick="addNewUser()" class="bg-purple-600 text-white font-bold py-2 px-6 rounded hover:bg-purple-700 transition shadow-sm">添加用户</button>
+            <!-- 4.1 密钥登录区域 -->
+            <div id="adminAuthSection" class="max-w-md mx-auto bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-sm">
+                <h2 class="text-2xl font-bold mb-4 text-center text-gray-800">🔒 管理员解锁</h2>
+                <p class="text-sm text-gray-500 mb-6 text-center">请输入 GitHub 用户名及 PAT 密钥以解锁录入权限</p>
+                
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">GitHub 用户名</label>
+                        <input type="text" id="ghOwner" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-gray-800" placeholder="例如: sunkr1995">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">PAT 密钥 (Token)</label>
+                        <input type="password" id="ghToken" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-gray-800" placeholder="ghp_xxxxxxxxxxxxxxxxx">
+                    </div>
+                    <button onclick="unlockAdmin()" class="w-full bg-gray-800 text-white font-bold py-2 px-4 rounded hover:bg-gray-900 transition mt-4">验证并解锁</button>
                 </div>
             </div>
 
-            <!-- 用户配置 -->
-            <div class="mb-8">
-                <h2 class="text-xl font-bold mb-4 border-l-4 border-gray-800 pl-2">⚙️ 用户配置 (是否参与排名)</h2>
-                <div id="adminUserConfig" class="flex flex-wrap gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
-                    <!-- 动态生成复选框 -->
-                </div>
-            </div>
-
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <!-- 新增计分 -->
-                <div class="bg-blue-50 p-5 rounded-xl border border-blue-100">
-                    <h2 class="text-xl font-bold mb-4 border-l-4 border-blue-500 pl-2 text-blue-900">➕ 新增单日计分</h2>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">日期 (如 2026.4.20)</label>
-                        <input type="text" id="addRecordDate" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500" placeholder="YYYY.M.D">
-                    </div>
-                    <div id="addRecordInputs" class="grid grid-cols-2 gap-3 mb-4">
-                        <!-- 动态生成得分输入框 -->
-                    </div>
-                    <button onclick="saveNewRecord()" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition shadow-sm">保存新增记录</button>
+            <!-- 4.2 管理员操作区域 (默认隐藏) -->
+            <div id="adminControlsSection" class="hidden">
+                <div class="flex justify-between items-center mb-8 border-b border-gray-200 pb-4">
+                    <h2 class="text-2xl font-bold text-gray-800">✅ 已解锁管理员权限</h2>
+                    <p class="text-sm text-green-600 font-medium">数据保存时将自动同步至 GitHub</p>
                 </div>
 
-                <!-- 修改计分 -->
-                <div class="bg-green-50 p-5 rounded-xl border border-green-100">
-                    <h2 class="text-xl font-bold mb-4 border-l-4 border-green-500 pl-2 text-green-900">📝 修改历史计分</h2>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">选择要修改的记录</label>
-                        <select id="editRecordSelect" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-green-500" onchange="loadEditRecordData()"></select>
+                <!-- 新增用户 -->
+                <div class="mb-8 bg-purple-50 p-5 rounded-xl border border-purple-100">
+                    <h2 class="text-xl font-bold mb-4 border-l-4 border-purple-500 pl-2 text-purple-900">👤 新增用户</h2>
+                    <div class="flex items-center space-x-4">
+                        <input type="text" id="newUserName" class="flex-1 border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-purple-500" placeholder="请输入新用户姓名">
+                        <button onclick="addNewUser()" class="bg-purple-600 text-white font-bold py-2 px-6 rounded hover:bg-purple-700 transition shadow-sm">添加并同步</button>
                     </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700 mb-1">修改日期</label>
-                        <input type="text" id="editRecordDate" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-green-500">
-                    </div>
-                    <div id="editRecordInputs" class="grid grid-cols-2 gap-3 mb-4">
-                        <!-- 动态生成得分输入框 -->
-                    </div>
-                    <button onclick="saveEditedRecord()" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700 transition shadow-sm">保存修改</button>
                 </div>
-            </div>
 
-            <!-- 导出数据 -->
-            <div class="mt-8 pt-6 border-t border-gray-200 text-center">
-                <p class="text-sm text-gray-500 mb-3">修改完成后，请下载最新的配置文件并替换原有的 data.json</p>
-                <button onclick="exportJsonData()" class="bg-gray-800 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-900 shadow-md transition">⬇️ 下载最新 data.json</button>
+                <!-- 用户配置 -->
+                <div class="mb-8">
+                    <div class="flex justify-between items-center mb-4">
+                        <h2 class="text-xl font-bold border-l-4 border-gray-800 pl-2">⚙️ 用户配置 (是否参与排名)</h2>
+                        <button onclick="saveUserConfig()" class="bg-gray-800 text-white text-sm font-bold py-1 px-4 rounded hover:bg-gray-900 transition">保存配置并同步</button>
+                    </div>
+                    <div id="adminUserConfig" class="flex flex-wrap gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                        <!-- 动态生成复选框 -->
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- 新增计分 -->
+                    <div class="bg-blue-50 p-5 rounded-xl border border-blue-100">
+                        <h2 class="text-xl font-bold mb-4 border-l-4 border-blue-500 pl-2 text-blue-900">➕ 新增单日计分</h2>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">日期 (如 2026.4.20)</label>
+                            <input type="text" id="addRecordDate" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500" placeholder="YYYY.M.D">
+                        </div>
+                        <div id="addRecordInputs" class="grid grid-cols-2 gap-3 mb-4"></div>
+                        <button onclick="saveNewRecord()" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition shadow-sm">保存新增并同步</button>
+                    </div>
+
+                    <!-- 修改计分 -->
+                    <div class="bg-green-50 p-5 rounded-xl border border-green-100">
+                        <h2 class="text-xl font-bold mb-4 border-l-4 border-green-500 pl-2 text-green-900">📝 修改历史计分</h2>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">选择要修改的记录</label>
+                            <select id="editRecordSelect" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-green-500" onchange="loadEditRecordData()"></select>
+                        </div>
+                        <div class="mb-4">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">修改日期</label>
+                            <input type="text" id="editRecordDate" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-green-500">
+                        </div>
+                        <div id="editRecordInputs" class="grid grid-cols-2 gap-3 mb-4"></div>
+                        <button onclick="saveEditedRecord()" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700 transition shadow-sm">保存修改并同步</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -184,11 +194,113 @@
     <script>
         let allData = { users: [], records: [] };
         let currentData = [];
+        
+        // GitHub API 配置状态 (仓库名和路径已写死)
+        let ghConfig = { 
+            owner: '', 
+            repo: 'Hangzhou-Mahjong-scoreboard-', 
+            path: 'data.json', 
+            token: '' 
+        };
+        let currentFileSha = ''; // 必须保存文件的 sha 才能进行更新
 
-        // 异步加载真实 data.json 数据
+        // ================= 核心：GitHub API 交互 =================
+
+        // Base64 编码解码 (支持中文)
+        function encodeBase64(str) { return btoa(unescape(encodeURIComponent(str))); }
+        function decodeBase64(str) { return decodeURIComponent(escape(atob(str))); }
+
+        // 显示/隐藏 Loading
+        function setLoading(show, text = '正在同步至 GitHub...') {
+            document.getElementById('loadingText').innerText = text;
+            if (show) document.getElementById('loadingOverlay').classList.add('active');
+            else document.getElementById('loadingOverlay').classList.remove('active');
+        }
+
+        // 验证并解锁管理员
+        async function unlockAdmin() {
+            ghConfig.owner = document.getElementById('ghOwner').value.trim();
+            ghConfig.token = document.getElementById('ghToken').value.trim();
+
+            if (!ghConfig.owner || !ghConfig.token) {
+                return alert('请填写 GitHub 用户名和 PAT 密钥！');
+            }
+
+            setLoading(true, '正在验证 GitHub 密钥...');
+            try {
+                const url = `https://api.github.com/repos/${ghConfig.owner}/${ghConfig.repo}/contents/${ghConfig.path}`;
+                const res = await fetch(url, {
+                    headers: { 'Authorization': `Bearer ${ghConfig.token}`, 'Accept': 'application/vnd.github+json' }
+                });
+
+                if (!res.ok) throw new Error('验证失败，请检查用户名或 Token 权限。');
+                
+                const fileData = await res.json();
+                currentFileSha = fileData.sha; // 记录 sha
+                
+                // 保存用户名到本地缓存 (不存 token)
+                localStorage.setItem('ghOwner', ghConfig.owner);
+
+                // 切换 UI
+                document.getElementById('adminAuthSection').classList.add('hidden');
+                document.getElementById('adminControlsSection').classList.remove('hidden');
+                alert('解锁成功！');
+            } catch (error) {
+                alert(error.message);
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // 将当前 allData 同步到 GitHub
+        async function syncToGitHub(commitMessage) {
+            setLoading(true, '正在将数据提交至 GitHub...');
+            const url = `https://api.github.com/repos/${ghConfig.owner}/${ghConfig.repo}/contents/${ghConfig.path}`;
+            const headers = { 'Authorization': `Bearer ${ghConfig.token}`, 'Accept': 'application/vnd.github+json' };
+
+            try {
+                // 1. 重新获取最新 SHA (防止冲突)
+                const getRes = await fetch(url, { headers });
+                if (!getRes.ok) throw new Error('获取文件最新状态失败');
+                const fileData = await getRes.json();
+                currentFileSha = fileData.sha;
+
+                // 2. 发送 PUT 请求更新文件
+                const contentStr = JSON.stringify(allData, null, 2);
+                const putRes = await fetch(url, {
+                    method: 'PUT',
+                    headers: headers,
+                    body: JSON.stringify({
+                        message: commitMessage,
+                        content: encodeBase64(contentStr),
+                        sha: currentFileSha
+                    })
+                });
+
+                if (!putRes.ok) throw new Error('提交更新失败');
+                
+                const putData = await putRes.json();
+                currentFileSha = putData.content.sha; // 更新本地 sha
+                return true;
+            } catch (error) {
+                console.error(error);
+                alert('同步失败: ' + error.message);
+                return false;
+            } finally {
+                setLoading(false);
+            }
+        }
+
+
+        // ================= 基础初始化与渲染逻辑 =================
+
         async function loadData() {
             try {
-                const response = await fetch('data.json');
+                // 尝试恢复本地缓存的 GitHub 用户名，默认为 sunkr1995
+                document.getElementById('ghOwner').value = localStorage.getItem('ghOwner') || 'sunkr1995';
+
+                // 加载数据
+                const response = await fetch('data.json?t=' + new Date().getTime()); // 加时间戳防缓存
                 if (!response.ok) throw new Error('网络响应不正常');
                 allData = await response.json();
                 applyTimeFilter(); 
@@ -198,21 +310,16 @@
             }
         }
 
-        // 初始化
         function init() {
             bindEvents();
             initUserSelect();
             renderAll();
         }
 
-        // 绑定事件
         function bindEvents() {
-            // Tab 切换逻辑
             document.querySelectorAll('.tab-btn').forEach(btn => {
-                // 防止重复绑定
                 const newBtn = btn.cloneNode(true);
                 btn.parentNode.replaceChild(newBtn, btn);
-                
                 newBtn.addEventListener('click', (e) => {
                     document.querySelectorAll('.tab-btn').forEach(b => {
                         b.classList.remove('active', 'text-blue-600', 'border-b-2', 'border-blue-600');
@@ -220,50 +327,38 @@
                     });
                     e.target.classList.add('active', 'text-blue-600', 'border-b-2', 'border-blue-600');
                     e.target.classList.remove('text-gray-500');
-
                     document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
                     document.getElementById(e.target.dataset.target).classList.add('active');
                 });
             });
 
-            // 时间筛选逻辑
             const timeFilter = document.getElementById('timeFilter');
             const newTimeFilter = timeFilter.cloneNode(true);
             timeFilter.parentNode.replaceChild(newTimeFilter, timeFilter);
             newTimeFilter.addEventListener('change', applyTimeFilter);
             
-            // 用户详情下拉框切换
             const userSelect = document.getElementById('userSelect');
             const newUserSelect = userSelect.cloneNode(true);
             userSelect.parentNode.replaceChild(newUserSelect, userSelect);
             newUserSelect.addEventListener('change', renderUserDetails);
         }
 
-        // 应用时间筛选并重新渲染
         function applyTimeFilter() {
             const filter = document.getElementById('timeFilter').value;
-            if (filter === 'all') {
-                currentData = allData.records;
-            } else if (filter === 'thisMonth') {
-                currentData = allData.records.filter(r => r.date.startsWith('2026.4'));
-            } else if (filter === 'thisWeek') {
-                currentData = allData.records.slice(-2);
-            }
-            init(); // 重新初始化所有视图
+            if (filter === 'all') currentData = allData.records;
+            else if (filter === 'thisMonth') currentData = allData.records.filter(r => r.date.startsWith('2026.4'));
+            else if (filter === 'thisWeek') currentData = allData.records.slice(-2);
+            init(); 
         }
 
-        // 统一渲染入口
         function renderAll() {
             renderDashboard();
             renderLeaderboard();
             renderUserDetails();
-            renderAdminPanel(); // 渲染管理员面板
-            
-            document.getElementById('globalStats').innerText = 
-                `共计 ${allData.users.length} 名用户 | 当前视图包含 ${currentData.length} 场对局记录`;
+            renderAdminPanel(); 
+            document.getElementById('globalStats').innerText = `共计 ${allData.users.length} 名用户 | 当前视图包含 ${currentData.length} 场对局记录`;
         }
 
-        // 格式化分数的样式类
         function getScoreClass(score, maxScore, minScore) {
             if (score === maxScore && score > 0) return 'bg-max-positive';
             if (score === minScore && score < 0) return 'bg-max-negative';
@@ -272,11 +367,9 @@
             return 'text-zero';
         }
 
-        // ================= 模块 1: 渲染数据看板 =================
         function renderDashboard() {
             const header = document.getElementById('dashboardHeader');
             const body = document.getElementById('dashboardBody');
-            
             let headerHtml = `<th class="py-3 px-4 border-b">日期</th>`;
             allData.users.forEach(u => { headerHtml += `<th class="py-3 px-4 border-b">${u.name}</th>`; });
             header.innerHTML = headerHtml;
@@ -325,13 +418,11 @@
             body.innerHTML = bodyHtml;
         }
 
-        // ================= 模块 2: 渲染排行榜 =================
         function renderLeaderboard() {
             let stats = {};
             allData.users.forEach(u => {
                 if (u.participateInRanking) stats[u.name] = { name: u.name, totalScore: 0, matches: 0, wins: 0 };
             });
-
             currentData.forEach(record => {
                 for (const [name, score] of Object.entries(record.scores)) {
                     if (stats[name]) {
@@ -341,10 +432,8 @@
                     }
                 }
             });
-
             const statsArray = Object.values(stats);
 
-            // 总分榜
             statsArray.sort((a, b) => b.totalScore - a.totalScore);
             let scoreHtml = '';
             let currentRank = 1;
@@ -357,10 +446,8 @@
             }
             document.getElementById('scoreRankingBody').innerHTML = scoreHtml;
 
-            // 胜率榜
             statsArray.forEach(u => { u.winRate = u.matches > 0 ? (u.wins / u.matches) * 100 : 0; });
             statsArray.sort((a, b) => b.winRate - a.winRate || b.matches - a.matches); 
-            
             let winRateHtml = '';
             currentRank = 1;
             for (let i = 0; i < statsArray.length; i++) {
@@ -373,7 +460,6 @@
             document.getElementById('winRateRankingBody').innerHTML = winRateHtml;
         }
 
-        // ================= 模块 3: 渲染用户详情 =================
         function initUserSelect() {
             const select = document.getElementById('userSelect');
             const currentVal = select.value;
@@ -424,23 +510,19 @@
             document.getElementById('detailMatches').innerText = matches;
         }
 
-        // ================= 模块 4: 管理员面板功能 =================
         function renderAdminPanel() {
-            // 1. 渲染用户配置 (是否参与排名)
             const configDiv = document.getElementById('adminUserConfig');
             configDiv.innerHTML = '';
             allData.users.forEach((u, index) => {
                 configDiv.innerHTML += `
                     <label class="flex items-center space-x-2 cursor-pointer bg-white px-3 py-2 rounded shadow-sm border border-gray-100">
-                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600" 
-                            ${u.participateInRanking ? 'checked' : ''} 
-                            onchange="toggleUserRanking(${index}, this.checked)">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600 user-config-checkbox" 
+                            data-index="${index}" ${u.participateInRanking ? 'checked' : ''}>
                         <span class="text-gray-700 font-medium">${u.name}</span>
                     </label>
                 `;
             });
 
-            // 2. 渲染新增计分输入框
             const addInputsDiv = document.getElementById('addRecordInputs');
             addInputsDiv.innerHTML = '';
             allData.users.forEach(u => {
@@ -452,7 +534,6 @@
                 `;
             });
 
-            // 3. 渲染修改计分下拉框
             const editSelect = document.getElementById('editRecordSelect');
             const currentEditVal = editSelect.value;
             editSelect.innerHTML = '<option value="">-- 请选择要修改的记录 --</option>';
@@ -461,7 +542,6 @@
             });
             if (currentEditVal) editSelect.value = currentEditVal;
             
-            // 渲染修改计分输入框
             const editInputsDiv = document.getElementById('editRecordInputs');
             editInputsDiv.innerHTML = '';
             allData.users.forEach(u => {
@@ -472,38 +552,46 @@
                     </div>
                 `;
             });
-            // 重新加载选中记录的数据
             if (currentEditVal) loadEditRecordData();
         }
 
-        // 新增用户
-        function addNewUser() {
+        // ================= 带有 GitHub 同步的管理员操作 =================
+
+        // 1. 新增用户
+        async function addNewUser() {
             const nameInput = document.getElementById('newUserName');
             const newName = nameInput.value.trim();
-
             if (!newName) return alert('请输入用户姓名！');
-            
-            // 检查是否已存在
-            const exists = allData.users.some(u => u.name === newName);
-            if (exists) return alert('该用户已存在！');
+            if (allData.users.some(u => u.name === newName)) return alert('该用户已存在！');
 
-            // 添加到数据中，默认参与排名
             allData.users.push({ name: newName, participateInRanking: true });
             
-            nameInput.value = ''; // 清空输入框
-            alert(`成功添加新用户：${newName}`);
-            
-            applyTimeFilter(); // 刷新所有视图
+            const success = await syncToGitHub(`Admin: Add user ${newName}`);
+            if (success) {
+                nameInput.value = ''; 
+                alert(`成功添加新用户：${newName} 并已同步至 GitHub！`);
+                applyTimeFilter(); 
+            } else {
+                allData.users.pop(); // 回滚本地更改
+            }
         }
 
-        // 切换用户排名状态
-        function toggleUserRanking(userIndex, isParticipating) {
-            allData.users[userIndex].participateInRanking = isParticipating;
-            applyTimeFilter(); // 重新计算并渲染
+        // 2. 保存用户配置
+        async function saveUserConfig() {
+            document.querySelectorAll('.user-config-checkbox').forEach(cb => {
+                const index = cb.getAttribute('data-index');
+                allData.users[index].participateInRanking = cb.checked;
+            });
+
+            const success = await syncToGitHub(`Admin: Update user ranking config`);
+            if (success) {
+                alert('配置已保存并同步至 GitHub！');
+                applyTimeFilter();
+            }
         }
 
-        // 保存新增记录
-        function saveNewRecord() {
+        // 3. 保存新增记录
+        async function saveNewRecord() {
             const date = document.getElementById('addRecordDate').value.trim();
             if (!date) return alert('请输入日期！');
 
@@ -519,17 +607,21 @@
 
             if (!hasData) return alert('请至少输入一名用户的得分！');
 
-            allData.records.push({ date: date, scores: newScores });
+            const newRecord = { date: date, scores: newScores };
+            allData.records.push(newRecord);
             
-            // 清空输入框
-            document.getElementById('addRecordDate').value = '';
-            allData.users.forEach(u => document.getElementById(`add_score_${u.name}`).value = '');
-            
-            alert('新增记录成功！');
-            applyTimeFilter(); // 刷新视图
+            const success = await syncToGitHub(`Admin: Add record for ${date}`);
+            if (success) {
+                document.getElementById('addRecordDate').value = '';
+                allData.users.forEach(u => document.getElementById(`add_score_${u.name}`).value = '');
+                alert('新增记录成功并已同步至 GitHub！');
+                applyTimeFilter(); 
+            } else {
+                allData.records.pop(); // 回滚
+            }
         }
 
-        // 加载选中的记录到修改面板
+        // 辅助：加载修改数据
         function loadEditRecordData() {
             const index = document.getElementById('editRecordSelect').value;
             if (index === '') {
@@ -541,23 +633,17 @@
                 });
                 return;
             }
-
             const record = allData.records[index];
             document.getElementById('editRecordDate').value = record.date;
-            
             allData.users.forEach(u => {
                 const input = document.getElementById(`edit_score_${u.name}`);
                 input.disabled = false;
-                if (record.scores[u.name] !== undefined) {
-                    input.value = record.scores[u.name];
-                } else {
-                    input.value = '';
-                }
+                input.value = record.scores[u.name] !== undefined ? record.scores[u.name] : '';
             });
         }
 
-        // 保存修改的记录
-        function saveEditedRecord() {
+        // 4. 保存修改记录
+        async function saveEditedRecord() {
             const index = document.getElementById('editRecordSelect').value;
             if (index === '') return alert('请先选择要修改的记录！');
 
@@ -567,31 +653,22 @@
             let updatedScores = {};
             allData.users.forEach(u => {
                 const val = document.getElementById(`edit_score_${u.name}`).value;
-                if (val !== '') {
-                    updatedScores[u.name] = parseInt(val, 10);
-                }
+                if (val !== '') updatedScores[u.name] = parseInt(val, 10);
             });
+
+            // 备份旧数据用于回滚
+            const oldRecord = JSON.parse(JSON.stringify(allData.records[index]));
 
             allData.records[index].date = date;
             allData.records[index].scores = updatedScores;
 
-            alert('修改记录成功！');
-            applyTimeFilter(); // 刷新视图
-        }
-
-        // 导出最新的 JSON 数据
-        function exportJsonData() {
-            const dataStr = JSON.stringify(allData, null, 2);
-            const blob = new Blob([dataStr], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'data.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            const success = await syncToGitHub(`Admin: Edit record for ${date}`);
+            if (success) {
+                alert('修改记录成功并已同步至 GitHub！');
+                applyTimeFilter(); 
+            } else {
+                allData.records[index] = oldRecord; // 回滚
+            }
         }
 
         // 启动应用
