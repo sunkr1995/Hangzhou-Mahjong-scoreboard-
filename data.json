@@ -23,6 +23,10 @@
     {
       "name": "台版",
       "participateInRanking": false
+    },
+    {
+      "name": "甜甜",
+      "participateInRanking": true
     }
   ],
   "records": [
