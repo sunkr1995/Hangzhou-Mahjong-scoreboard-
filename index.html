@@ -217,13 +217,23 @@
             });
             header.innerHTML = headerHtml;
 
-            // 2. 寻找当前视图中的全局最大正分和最大负分
+            // 2. 寻找当前视图中的全局最大正分和最大负分，并初始化总计对象
             let maxScore = -Infinity;
             let minScore = Infinity;
+            let totals = {}; // 用于存储每个用户的总分
+            allData.users.forEach(u => totals[u.name] = 0);
+
             currentData.forEach(record => {
                 Object.values(record.scores).forEach(score => {
                     if (score > maxScore) maxScore = score;
                     if (score < minScore) minScore = score;
+                });
+                
+                // 累加每个用户的总分
+                allData.users.forEach(u => {
+                    if (record.scores[u.name] !== undefined) {
+                        totals[u.name] += record.scores[u.name];
+                    }
                 });
             });
 
@@ -246,9 +256,24 @@
                 bodyHtml += `</tr>`;
             });
             
-            if(currentData.length === 0) {
+            // 4. 追加“总计”行
+            if(currentData.length > 0) {
+                bodyHtml += `<tr class="bg-blue-50/50 font-bold hover:bg-blue-100/50 transition-colors">
+                    <td class="py-3 px-4 border-b text-gray-800">总计</td>`;
+                
+                allData.users.forEach(u => {
+                    const totalScore = totals[u.name];
+                    // 总计行只应用红绿字体颜色，不应用极值背景高亮
+                    const textClass = totalScore > 0 ? 'text-positive' : totalScore < 0 ? 'text-negative' : 'text-zero';
+                    const displayScore = totalScore > 0 ? '+' + totalScore : totalScore;
+                    
+                    bodyHtml += `<td class="py-3 px-4 border-b ${textClass}">${displayScore}</td>`;
+                });
+                bodyHtml += `</tr>`;
+            } else {
                 bodyHtml = `<tr><td colspan="${allData.users.length + 1}" class="py-8 text-gray-400">暂无数据</td></tr>`;
             }
+            
             body.innerHTML = bodyHtml;
         }
 
