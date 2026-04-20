@@ -55,6 +55,10 @@
     {
       "name": "台版",
       "participateInRanking": false
+    },
+    {
+      "name": "超超",
+      "participateInRanking": true
     }
   ],
   "records": [
