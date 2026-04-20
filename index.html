@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>历史得分统计系统</title>
+    <!-- 引入 Tailwind CSS 用于快速美化界面 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 自定义过渡动画 */
+        .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
+        .tab-content.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* 核心样式规则：正红负绿 */
+        .text-positive { color: #ef4444 !important; font-weight: 600; } /* Tailwind red-500 */
+        .text-negative { color: #22c55e !important; font-weight: 600; } /* Tailwind green-500 */
+        .text-zero { color: #6b7280; } /* Tailwind gray-500 */
+        
+        /* 核心样式规则：极值高亮 */
+        .bg-max-positive { background-color: #ef4444 !important; color: #ffffff !important; font-weight: bold; }
+        .bg-max-negative { background-color: #22c55e !important; color: #ffffff !important; font-weight: bold; }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800 font-sans">
+
+    <div class="max-w-6xl mx-auto p-6">
+        <!-- 头部 -->
+        <header class="flex justify-between items-center mb-8 bg-white p-6 rounded-xl shadow-sm">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">🏆 历史得分统计系统</h1>
+                <p class="text-gray-500 mt-2 text-sm" id="globalStats">数据加载中...</p>
+            </div>
+            <!-- 时间筛选器 -->
+            <div class="flex items-center space-x-2">
+                <label class="text-sm font-medium text-gray-600">时间筛选:</label>
+                <select id="timeFilter" class="border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="all">全部历史</option>
+                    <option value="thisMonth">本月 (2026年4月)</option>
+                    <option value="thisWeek">本周</option>
+                </select>
+            </div>
+        </header>
+
+        <!-- 导航 Tabs -->
+        <div class="flex space-x-4 mb-6 border-b border-gray-200 pb-2">
+            <button class="tab-btn active px-4 py-2 font-semibold text-blue-600 border-b-2 border-blue-600" data-target="dashboard">📊 数据看板 (明细)</button>
+            <button class="tab-btn px-4 py-2 font-semibold text-gray-500 hover:text-blue-600" data-target="leaderboard">🏅 排行榜</button>
+            <button class="tab-btn px-4 py-2 font-semibold text-gray-500 hover:text-blue-600" data-target="userDetails">👤 用户详情</button>
+        </div>
+
+        <!-- 模块 1: 数据看板 (Dashboard) -->
+        <div id="dashboard" class="tab-content active bg-white rounded-xl shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-center border-collapse">
+                    <thead class="bg-gray-100 text-gray-700">
+                        <tr id="dashboardHeader">
+                            <!-- 表头由 JS 动态生成 -->
+                        </tr>
+                    </thead>
+                    <tbody id="dashboardBody" class="divide-y divide-gray-200">
+                        <!-- 内容由 JS 动态生成 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 模块 2: 排行榜 (Leaderboard) -->
+        <div id="leaderboard" class="tab-content bg-white rounded-xl shadow-sm p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <!-- 总分榜 -->
+                <div>
+                    <h2 class="text-xl font-bold mb-4 text-gray-800 border-l-4 border-blue-500 pl-2">🔥 总分排行榜</h2>
+                    <table class="w-full text-center border-collapse">
+                        <thead class="bg-blue-50 text-blue-800">
+                            <tr><th class="py-2">排名</th><th class="py-2">姓名</th><th class="py-2">总分</th></tr>
+                        </thead>
+                        <tbody id="scoreRankingBody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+                <!-- 胜率榜 -->
+                <div>
+                    <h2 class="text-xl font-bold mb-4 text-gray-800 border-l-4 border-green-500 pl-2">📈 胜率排行榜</h2>
+                    <table class="w-full text-center border-collapse">
+                        <thead class="bg-green-50 text-green-800">
+                            <tr><th class="py-2">排名</th><th class="py-2">姓名</th><th class="py-2">胜率</th><th class="py-2">胜/总场次</th></tr>
+                        </thead>
+                        <tbody id="winRateRankingBody" class="divide-y divide-gray-100"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 模块 3: 用户详情 (User Details) -->
+        <div id="userDetails" class="tab-content bg-white rounded-xl shadow-sm p-6">
+            <div class="mb-6 flex items-center space-x-4">
+                <label class="font-medium text-gray-700">选择用户查看:</label>
+                <select id="userSelect" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"></select>
+            </div>
+            
+            <div class="grid grid-cols-3 gap-4 mb-6">
+                <div class="bg-blue-50 p-4 rounded-lg text-center">
+                    <div class="text-sm text-gray-500">累计总分</div>
+                    <div class="text-2xl font-bold text-blue-600" id="detailTotalScore">-</div>
+                </div>
+                <div class="bg-gray-50 border border-gray-100 p-4 rounded-lg text-center">
+                    <div class="text-sm text-gray-500">历史胜率</div>
+                    <div class="text-2xl font-bold" id="detailWinRate">-</div>
+                </div>
+                <div class="bg-purple-50 p-4 rounded-lg text-center">
+                    <div class="text-sm text-gray-500">参赛场次</div>
+                    <div class="text-2xl font-bold text-purple-600" id="detailMatches">-</div>
+                </div>
+            </div>
+
+            <h3 class="font-bold text-lg mb-3 border-l-4 border-gray-400 pl-2">参赛记录明细</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-center border-collapse">
+                    <thead class="bg-gray-100">
+                        <tr><th class="py-2">日期</th><th class="py-2">得分</th><th class="py-2">结果</th></tr>
+                    </thead>
+                    <tbody id="userDetailBody" class="divide-y divide-gray-200"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allData = { users: [], records: [] };
+        let currentData = [];
+
+        // 异步加载真实 data.json 数据
+        async function loadData() {
+            try {
+                const response = await fetch('data.json');
+                if (!response.ok) throw new Error('网络响应不正常');
+                allData = await response.json();
+                currentData = allData.records;
+                init();
+            } catch (error) {
+                console.error("加载 data.json 失败:", error);
+                document.getElementById('globalStats').innerHTML = `<span class="text-red-500">数据加载失败，请确保使用本地服务器运行且 data.json 存在。</span>`;
+            }
+        }
+
+        // 初始化
+        function init() {
+            bindEvents();
+            initUserSelect();
+            renderAll();
+        }
+
+        // 绑定事件 (Tab切换 & 时间筛选)
+        function bindEvents() {
+            // Tab 切换逻辑
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    document.querySelectorAll('.tab-btn').forEach(b => {
+                        b.classList.remove('active', 'text-blue-600', 'border-b-2', 'border-blue-600');
+                        b.classList.add('text-gray-500');
+                    });
+                    e.target.classList.add('active', 'text-blue-600', 'border-b-2', 'border-blue-600');
+                    e.target.classList.remove('text-gray-500');
+
+                    document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+                    document.getElementById(e.target.dataset.target).classList.add('active');
+                });
+            });
+
+            // 时间筛选逻辑
+            document.getElementById('timeFilter').addEventListener('change', (e) => {
+                const filter = e.target.value;
+                if (filter === 'all') {
+                    currentData = allData.records;
+                } else if (filter === 'thisMonth') {
+                    // 假设当前是 2026年4月
+                    currentData = allData.records.filter(r => r.date.startsWith('2026.4'));
+                } else if (filter === 'thisWeek') {
+                    // 简易模拟：只取最后两条代表本周
+                    currentData = allData.records.slice(-2);
+                }
+                renderAll();
+            });
+
+            // 用户详情下拉框切换
+            document.getElementById('userSelect').addEventListener('change', renderUserDetails);
+        }
+
+        // 统一渲染入口
+        function renderAll() {
+            renderDashboard();
+            renderLeaderboard();
+            renderUserDetails();
+            
+            document.getElementById('globalStats').innerText = 
+                `共计 ${allData.users.length} 名用户 | 当前视图包含 ${currentData.length} 场对局记录`;
+        }
+
+        // 格式化分数的样式类
+        function getScoreClass(score, maxScore, minScore) {
+            if (score === maxScore && score > 0) return 'bg-max-positive';
+            if (score === minScore && score < 0) return 'bg-max-negative';
+            if (score > 0) return 'text-positive';
+            if (score < 0) return 'text-negative';
+            return 'text-zero';
+        }
+
+        // ================= 模块 1: 渲染数据看板 =================
+        function renderDashboard() {
+            const header = document.getElementById('dashboardHeader');
+            const body = document.getElementById('dashboardBody');
+            
+            // 1. 生成表头
+            let headerHtml = `<th class="py-3 px-4 border-b">日期</th>`;
+            allData.users.forEach(u => {
+                headerHtml += `<th class="py-3 px-4 border-b">${u.name}</th>`;
+            });
+            header.innerHTML = headerHtml;
+
+            // 2. 寻找当前视图中的全局最大正分和最大负分
+            let maxScore = -Infinity;
+            let minScore = Infinity;
+            currentData.forEach(record => {
+                Object.values(record.scores).forEach(score => {
+                    if (score > maxScore) maxScore = score;
+                    if (score < minScore) minScore = score;
+                });
+            });
+
+            // 3. 生成表格内容
+            let bodyHtml = '';
+            currentData.forEach(record => {
+                bodyHtml += `<tr class="hover:bg-gray-50 transition-colors"><td class="py-3 px-4 border-b font-medium text-gray-600">${record.date}</td>`;
+                allData.users.forEach(u => {
+                    const score = record.scores[u.name];
+                    if (score !== undefined) {
+                        const styleClass = getScoreClass(score, maxScore, minScore);
+                        const cellStyle = `class="py-3 px-4 border-b"`;
+                        const innerSpan = (styleClass.includes('bg-')) ? `<span class="${styleClass} px-2 py-1 rounded shadow-sm">${score > 0 ? '+'+score : score}</span>` : `<span class="${styleClass}">${score > 0 ? '+'+score : score}</span>`;
+                        
+                        bodyHtml += `<td ${cellStyle}>${innerSpan}</td>`;
+                    } else {
+                        bodyHtml += `<td class="py-3 px-4 border-b text-gray-300">-</td>`;
+                    }
+                });
+                bodyHtml += `</tr>`;
+            });
+            
+            if(currentData.length === 0) {
+                bodyHtml = `<tr><td colspan="${allData.users.length + 1}" class="py-8 text-gray-400">暂无数据</td></tr>`;
+            }
+            body.innerHTML = bodyHtml;
+        }
+
+        // ================= 模块 2: 渲染排行榜 =================
+        function renderLeaderboard() {
+            let stats = {};
+            // 初始化参与排名的用户
+            allData.users.forEach(u => {
+                if (u.participateInRanking) {
+                    stats[u.name] = { name: u.name, totalScore: 0, matches: 0, wins: 0 };
+                }
+            });
+
+            // 统计数据 (基于当前时间筛选的数据)
+            currentData.forEach(record => {
+                for (const [name, score] of Object.entries(record.scores)) {
+                    if (stats[name]) {
+                        stats[name].totalScore += score;
+                        stats[name].matches += 1;
+                        if (score > 0) stats[name].wins += 1; // 假设得分 > 0 记为胜场
+                    }
+                }
+            });
+
+            const statsArray = Object.values(stats);
+
+            // 1. 总分榜渲染 (处理并列排名)
+            statsArray.sort((a, b) => b.totalScore - a.totalScore);
+            let scoreHtml = '';
+            let currentRank = 1;
+            for (let i = 0; i < statsArray.length; i++) {
+                if (i > 0 && statsArray[i].totalScore < statsArray[i-1].totalScore) {
+                    currentRank = i + 1;
+                }
+                const user = statsArray[i];
+                let rankIcon = currentRank === 1 ? '🥇' : currentRank === 2 ? '🥈' : currentRank === 3 ? '🥉' : currentRank;
+                const scoreClass = user.totalScore > 0 ? 'text-positive' : user.totalScore < 0 ? 'text-negative' : 'text-zero';
+                
+                scoreHtml += `
+                    <tr class="hover:bg-blue-50/50">
+                        <td class="py-3 font-bold text-gray-600">${rankIcon}</td>
+                        <td class="py-3 font-medium">${user.name}</td>
+                        <td class="py-3 ${scoreClass}">${user.totalScore > 0 ? '+'+user.totalScore : user.totalScore}</td>
+                    </tr>`;
+            }
+            document.getElementById('scoreRankingBody').innerHTML = scoreHtml;
+
+            // 2. 胜率榜渲染
+            statsArray.forEach(u => {
+                u.winRate = u.matches > 0 ? (u.wins / u.matches) * 100 : 0;
+            });
+            statsArray.sort((a, b) => b.winRate - a.winRate || b.matches - a.matches); // 胜率相同比场次
+            
+            let winRateHtml = '';
+            currentRank = 1;
+            for (let i = 0; i < statsArray.length; i++) {
+                if (i > 0 && statsArray[i].winRate < statsArray[i-1].winRate) {
+                    currentRank = i + 1;
+                }
+                const user = statsArray[i];
+                let rankIcon = currentRank === 1 ? '🥇' : currentRank === 2 ? '🥈' : currentRank === 3 ? '🥉' : currentRank;
+                
+                // 胜率颜色逻辑：>= 50% 红色(positive)，< 50% 绿色(negative)
+                const winRateColorClass = user.winRate >= 50 ? 'text-positive' : 'text-negative';
+                
+                winRateHtml += `
+                    <tr class="hover:bg-green-50/50">
+                        <td class="py-3 font-bold text-gray-600">${rankIcon}</td>
+                        <td class="py-3 font-medium">${user.name}</td>
+                        <td class="py-3 font-bold ${winRateColorClass}">${user.winRate.toFixed(1)}%</td>
+                        <td class="py-3 text-sm text-gray-500">${user.wins} / ${user.matches}</td>
+                    </tr>`;
+            }
+            document.getElementById('winRateRankingBody').innerHTML = winRateHtml;
+        }
+
+        // ================= 模块 3: 渲染用户详情 =================
+        function initUserSelect() {
+            const select = document.getElementById('userSelect');
+            select.innerHTML = '';
+            allData.users.forEach(u => {
+                select.innerHTML += `<option value="${u.name}">${u.name}</option>`;
+            });
+        }
+
+        function renderUserDetails() {
+            const userName = document.getElementById('userSelect').value;
+            if (!userName) return;
+
+            let totalScore = 0;
+            let matches = 0;
+            let wins = 0;
+            let detailHtml = '';
+
+            // 寻找该用户的局部极值以便高亮
+            let maxScore = -Infinity;
+            let minScore = Infinity;
+            currentData.forEach(record => {
+                const score = record.scores[userName];
+                if (score !== undefined) {
+                    if (score > maxScore) maxScore = score;
+                    if (score < minScore) minScore = score;
+                }
+            });
+
+            currentData.forEach(record => {
+                const score = record.scores[userName];
+                if (score !== undefined) {
+                    totalScore += score;
+                    matches += 1;
+                    if (score > 0) wins += 1;
+
+                    const styleClass = getScoreClass(score, maxScore, minScore);
+                    const innerSpan = (styleClass.includes('bg-')) ? `<span class="${styleClass} px-2 py-1 rounded shadow-sm">${score > 0 ? '+'+score : score}</span>` : `<span class="${styleClass}">${score > 0 ? '+'+score : score}</span>`;
+                    const resultTag = score > 0 ? `<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs">胜</span>` : 
+                                      score < 0 ? `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">负</span>` : 
+                                      `<span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">平</span>`;
+
+                    detailHtml += `
+                        <tr class="hover:bg-gray-50">
+                            <td class="py-3 text-gray-600">${record.date}</td>
+                            <td class="py-3">${innerSpan}</td>
+                            <td class="py-3">${resultTag}</td>
+                        </tr>`;
+                }
+            });
+
+            if (matches === 0) detailHtml = `<tr><td colspan="3" class="py-6 text-gray-400">该时间段内无参赛记录</td></tr>`;
+
+            document.getElementById('userDetailBody').innerHTML = detailHtml;
+            
+            // 总分
+            document.getElementById('detailTotalScore').innerText = totalScore > 0 ? '+' + totalScore : totalScore;
+            document.getElementById('detailTotalScore').className = `text-2xl font-bold ${totalScore > 0 ? 'text-positive' : totalScore < 0 ? 'text-negative' : 'text-zero'}`;
+            
+            // 胜率计算及颜色逻辑：>= 50% 红色(positive)，< 50% 绿色(negative)
+            const winRateNum = matches > 0 ? (wins / matches) * 100 : 0;
+            const detailWinRateEl = document.getElementById('detailWinRate');
+            detailWinRateEl.innerText = winRateNum.toFixed(1) + '%';
+            detailWinRateEl.className = `text-2xl font-bold ${winRateNum >= 50 ? 'text-positive' : 'text-negative'}`;
+            
+            // 场次
+            document.getElementById('detailMatches').innerText = matches;
+        }
+
+        // 启动应用
+        loadData();
+    </script>
+</body>
+</html>

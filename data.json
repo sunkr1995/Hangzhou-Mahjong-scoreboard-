@@ -1,0 +1,62 @@
+{
+  "users": [
+    {
+      "name": "小杨",
+      "participateInRanking": true
+    },
+    {
+      "name": "小朱",
+      "participateInRanking": true
+    },
+    {
+      "name": "鸭鸭",
+      "participateInRanking": true
+    },
+    {
+      "name": "五五",
+      "participateInRanking": true
+    },
+    {
+      "name": "六六",
+      "participateInRanking": true
+    },
+    {
+      "name": "台版",
+      "participateInRanking": false
+    }
+  ],
+  "records": [
+    {
+      "date": "2026.4.15",
+      "scores": {
+        "小杨": 22,
+        "小朱": -125,
+        "五五": 176,
+        "六六": 0,
+        "台版": 10
+      }
+    },
+    {
+      "date": "2026.4.18",
+      "scores": {
+        "小杨": 128,
+        "小朱": -148,
+        "鸭鸭": 43,
+        "五五": -186,
+        "六六": -156,
+        "台版": 30
+      }
+    },
+    {
+      "date": "2026.4.19",
+      "scores": {
+        "小杨": 44,
+        "小朱": -52,
+        "鸭鸭": 35,
+        "五五": 79,
+        "六六": -118,
+        "台版": 60
+      }
+    }
+  ]
+}
