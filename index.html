@@ -6,6 +6,8 @@
     <title>杭麻积分榜</title>
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Chart.js 用于绘制美观的折线图 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
         .tab-content.active { display: block; }
@@ -84,7 +86,6 @@
             </div>
             
             <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-                <!-- 增加 id 以便 html2canvas 抓取 -->
                 <div id="dashboardTableContainer" class="overflow-x-auto overflow-y-auto max-h-[70vh] bg-white">
                     <table class="w-full text-center border-collapse relative">
                         <thead class="bg-gray-200 text-gray-800 sticky top-0 z-20 shadow-sm">
@@ -133,6 +134,15 @@
                     <div class="text-sm text-gray-500">参赛场次</div><div class="text-2xl font-bold text-purple-600" id="detailMatches">-</div>
                 </div>
             </div>
+
+            <!-- 新增：得分走势折线图容器 -->
+            <div id="chartContainer" class="hidden mb-8 bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+                <h3 class="font-bold text-lg mb-4 border-l-4 border-blue-500 pl-2 text-gray-800">📈 单局得分走势</h3>
+                <div class="relative h-64 w-full">
+                    <canvas id="userScoreChart"></canvas>
+                </div>
+            </div>
+
             <h3 class="font-bold text-lg mb-3 border-l-4 border-gray-400 pl-2">参赛记录明细</h3>
             <div class="overflow-x-auto overflow-y-auto max-h-[50vh] border border-gray-100 rounded-lg">
                 <table class="w-full text-center border-collapse relative">
@@ -218,6 +228,9 @@
         
         let ghConfig = { owner: '', repo: 'Hangzhou-Mahjong-scoreboard-', path: 'data.json', token: '' };
         let currentFileSha = ''; 
+        
+        // 全局折线图实例
+        let userScoreChartInstance = null;
 
         // ================= 核心：GitHub API 交互 =================
         function encodeBase64(str) { return btoa(unescape(encodeURIComponent(str))); }
@@ -512,7 +525,6 @@
             if (typeof html2canvas === 'undefined') {
                 setLoading(true, '首次使用，正在加载截图组件...');
                 const script = document.createElement('script');
-                // 使用 jsdelivr CDN，相对稳定
                 script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
                 script.onload = () => {
                     executeScreenshot();
@@ -529,29 +541,23 @@
 
         function executeScreenshot() {
             const tableContainer = document.getElementById('dashboardTableContainer');
-            
-            // 记录原始样式
             const originalMaxHeight = tableContainer.style.maxHeight;
             const originalOverflow = tableContainer.style.overflow;
             
-            // 临时移除滚动条限制，让表格完全展开以便截图
             tableContainer.style.maxHeight = 'none';
             tableContainer.style.overflow = 'visible';
             
             setLoading(true, '正在生成长图，请稍候...');
 
-            // 延迟一小会儿，确保浏览器完成 DOM 展开的渲染
             setTimeout(() => {
                 html2canvas(tableContainer, {
-                    scale: 2, // 提高清晰度
+                    scale: 2, 
                     useCORS: true,
-                    backgroundColor: '#ffffff' // 确保背景是白色而不是透明
+                    backgroundColor: '#ffffff' 
                 }).then(canvas => {
-                    // 恢复原始样式
                     tableContainer.style.maxHeight = originalMaxHeight || '';
                     tableContainer.style.overflow = originalOverflow || '';
                     
-                    // 触发下载
                     const link = document.createElement('a');
                     const dateStr = formatDateForDisplay(new Date());
                     link.download = `得分看板_${dateStr}.png`;
@@ -632,6 +638,10 @@
             let totalScore = 0, matches = 0, wins = 0, detailHtml = '';
             let maxScore = -Infinity, minScore = Infinity;
             
+            // 用于图表的数据收集
+            let chartLabels = [];
+            let chartScores = [];
+
             if (isParticipating) {
                 currentData.forEach(record => {
                     const score = record.scores[userName];
@@ -648,6 +658,10 @@
                     totalScore += score;
                     matches += 1;
                     if (score > 0) wins += 1;
+
+                    // 收集图表数据
+                    chartLabels.push(record.date);
+                    chartScores.push(score);
 
                     const styleClass = getScoreClass(score, maxScore, minScore, isParticipating);
                     const innerSpan = (styleClass.includes('bg-')) ? `<span class="${styleClass} px-2 py-1 rounded shadow-sm">${score > 0 ? '+'+score : score}</span>` : `<span class="${styleClass}">${score > 0 ? '+'+score : score}</span>`;
@@ -667,6 +681,86 @@
             document.getElementById('detailWinRate').innerText = winRateNum.toFixed(1) + '%';
             document.getElementById('detailWinRate').className = `text-2xl font-bold ${winRateNum >= 50 ? 'text-positive' : 'text-negative'}`;
             document.getElementById('detailMatches').innerText = matches;
+
+            // 渲染图表
+            const chartContainer = document.getElementById('chartContainer');
+            if (chartLabels.length > 0) {
+                chartContainer.classList.remove('hidden');
+                renderUserScoreChart(chartLabels, chartScores);
+            } else {
+                chartContainer.classList.add('hidden');
+            }
+        }
+
+        // ================= 绘制折线图的核心逻辑 =================
+        function renderUserScoreChart(labels, data) {
+            const ctx = document.getElementById('userScoreChart').getContext('2d');
+            
+            // 销毁旧实例，防止重叠
+            if (userScoreChartInstance) {
+                userScoreChartInstance.destroy();
+            }
+
+            // 创建漂亮的渐变背景
+            const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, 'rgba(59, 130, 246, 0.4)'); // Tailwind blue-500 40%
+            gradient.addColorStop(1, 'rgba(59, 130, 246, 0.0)');
+
+            // 根据正负分设置点的颜色 (赢钱红，输钱绿，平局灰)
+            const pointColors = data.map(score => score > 0 ? '#ef4444' : (score < 0 ? '#22c55e' : '#9ca3af'));
+
+            userScoreChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '单局得分',
+                        data: data,
+                        borderColor: '#3b82f6', // 蓝色的主线
+                        backgroundColor: gradient,
+                        borderWidth: 2,
+                        pointBackgroundColor: pointColors,
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        pointHoverRadius: 7,
+                        fill: true,
+                        tension: 0.3 // 平滑曲线
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                            titleFont: { size: 13 },
+                            bodyFont: { size: 14, weight: 'bold' },
+                            padding: 10,
+                            callbacks: {
+                                label: function(context) {
+                                    let val = context.raw;
+                                    return val > 0 ? '得分: +' + val : '得分: ' + val;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            grid: {
+                                // 加深 0 分的基准线
+                                color: (context) => context.tick.value === 0 ? '#9ca3af' : '#f3f4f6',
+                                lineWidth: (context) => context.tick.value === 0 ? 2 : 1
+                            }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { maxTicksLimit: 10 } // 防止X轴日期太密
+                        }
+                    }
+                }
+            });
         }
 
         function renderAdminPanel() {
