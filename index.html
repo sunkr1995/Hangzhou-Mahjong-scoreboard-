@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>杭麻积分榜</title>
+    <title>历史得分统计系统</title>
     <!-- 引入 Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
@@ -35,7 +35,7 @@
         <!-- 头部 -->
         <header class="flex justify-between items-start mb-8 bg-white p-6 rounded-xl shadow-sm">
             <div>
-                <h1 class="text-3xl font-bold text-gray-800">🏆 杭麻积分榜</h1>
+                <h1 class="text-3xl font-bold text-gray-800">🏆 历史得分统计系统</h1>
                 <p class="text-gray-500 mt-2 text-sm" id="globalStats">数据加载中...</p>
             </div>
             
@@ -75,16 +75,24 @@
         </div>
 
         <!-- 模块 1: 数据看板 -->
-        <div id="dashboard" class="tab-content active bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
-            <!-- 增加 max-h-[70vh] 和 overflow-y-auto，让表格在内部滚动 -->
-            <div class="overflow-x-auto overflow-y-auto max-h-[70vh]">
-                <table class="w-full text-center border-collapse relative">
-                    <!-- 增加 sticky top-0 z-20 让表头吸顶 -->
-                    <thead class="bg-gray-200 text-gray-800 sticky top-0 z-20 shadow-sm">
-                        <tr id="dashboardHeader"></tr>
-                    </thead>
-                    <tbody id="dashboardBody" class="divide-y divide-gray-200"></tbody>
-                </table>
+        <div id="dashboard" class="tab-content active">
+            <!-- 导出长图按钮 -->
+            <div class="flex justify-end mb-3">
+                <button onclick="exportDashboardToImage()" class="bg-green-600 text-white text-sm font-bold px-4 py-2 rounded-lg hover:bg-green-700 transition shadow-sm flex items-center space-x-1">
+                    <span>📸 导出长图</span>
+                </button>
+            </div>
+            
+            <div class="bg-white rounded-xl shadow-sm overflow-hidden border border-gray-100">
+                <!-- 增加 id 以便 html2canvas 抓取 -->
+                <div id="dashboardTableContainer" class="overflow-x-auto overflow-y-auto max-h-[70vh] bg-white">
+                    <table class="w-full text-center border-collapse relative">
+                        <thead class="bg-gray-200 text-gray-800 sticky top-0 z-20 shadow-sm">
+                            <tr id="dashboardHeader"></tr>
+                        </thead>
+                        <tbody id="dashboardBody" class="divide-y divide-gray-200"></tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -126,7 +134,6 @@
                 </div>
             </div>
             <h3 class="font-bold text-lg mb-3 border-l-4 border-gray-400 pl-2">参赛记录明细</h3>
-            <!-- 同样为详情表格增加内部滚动和表头吸顶 -->
             <div class="overflow-x-auto overflow-y-auto max-h-[50vh] border border-gray-100 rounded-lg">
                 <table class="w-full text-center border-collapse relative">
                     <thead class="bg-gray-100 sticky top-0 z-10 shadow-sm"><tr><th class="py-2">日期</th><th class="py-2">得分</th><th class="py-2">结果</th></tr></thead>
@@ -216,7 +223,7 @@
         function encodeBase64(str) { return btoa(unescape(encodeURIComponent(str))); }
         function decodeBase64(str) { return decodeURIComponent(escape(atob(str))); }
 
-        function setLoading(show, text = '正在同步至 GitHub...') {
+        function setLoading(show, text = '正在处理...') {
             document.getElementById('loadingText').innerText = text;
             if (show) document.getElementById('loadingOverlay').classList.add('active');
             else document.getElementById('loadingOverlay').classList.remove('active');
@@ -289,7 +296,7 @@
 
         // ================= 时间处理与筛选逻辑 =================
         function formatDateForDisplay(date) {
-            if (!date) return '';
+            if (!date || isNaN(date.getTime())) return '';
             const y = date.getFullYear();
             const m = String(date.getMonth() + 1).padStart(2, '0');
             const d = String(date.getDate()).padStart(2, '0');
@@ -297,8 +304,17 @@
         }
 
         function parseDate(dateStr) {
-            const parts = dateStr.replace(/-/g, '.').split('.');
-            if (parts.length === 3) return new Date(parts[0], parts[1] - 1, parts[2]);
+            if (!dateStr) return new Date(NaN);
+            let cleanStr = dateStr.replace(/[\/\-年月]/g, '.').replace(/日/g, '').trim();
+            cleanStr = cleanStr.replace(/\.$/, '');
+            const parts = cleanStr.split('.');
+            
+            if (parts.length === 3) {
+                return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+            } else if (parts.length === 2) {
+                const currentYear = new Date().getFullYear();
+                return new Date(currentYear, parseInt(parts[0], 10) - 1, parseInt(parts[1], 10));
+            }
             return new Date(dateStr);
         }
 
@@ -317,39 +333,50 @@
                 const currentMonth = now.getMonth();
                 currentData = allData.records.filter(r => {
                     const d = parseDate(r.date);
+                    if (isNaN(d.getTime())) return false;
                     return d.getFullYear() === currentYear && d.getMonth() === currentMonth;
                 });
                 const firstDay = new Date(currentYear, currentMonth, 1);
                 const lastDay = new Date(currentYear, currentMonth + 1, 0);
                 displayStr = `${formatDateForDisplay(firstDay)} - ${formatDateForDisplay(lastDay)}`;
             } else if (filter === 'thisWeek') {
-                const dayOfWeek = now.getDay() === 0 ? 7 : now.getDay(); 
-                const startOfWeek = new Date(now);
-                startOfWeek.setDate(now.getDate() - dayOfWeek + 1);
-                startOfWeek.setHours(0, 0, 0, 0);
-                const endOfWeek = new Date(now);
-                endOfWeek.setDate(now.getDate() + (7 - dayOfWeek));
+                const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                const dayOfWeek = today.getDay() === 0 ? 7 : today.getDay(); 
+                
+                const startOfWeek = new Date(today);
+                startOfWeek.setDate(today.getDate() - dayOfWeek + 1);
+                
+                const endOfWeek = new Date(startOfWeek);
+                endOfWeek.setDate(startOfWeek.getDate() + 6);
                 endOfWeek.setHours(23, 59, 59, 999);
+                
                 currentData = allData.records.filter(r => {
                     const d = parseDate(r.date);
+                    if (isNaN(d.getTime())) return false;
                     return d >= startOfWeek && d <= endOfWeek;
                 });
                 displayStr = `${formatDateForDisplay(startOfWeek)} - ${formatDateForDisplay(endOfWeek)}`;
             } else if (filter === 'custom') {
-                const startVal = document.getElementById('startDate').value;
+                const startVal = document.getElementById('startDate').value; 
                 const endVal = document.getElementById('endDate').value;
                 if (!startVal || !endVal) {
                     if (isCustomConfirm) alert("请选择完整的起止日期！");
                     return; 
                 }
-                const startCustom = new Date(startVal); startCustom.setHours(0,0,0,0);
-                const endCustom = new Date(endVal); endCustom.setHours(23,59,59,999);
+                
+                const sParts = startVal.split('-');
+                const startCustom = new Date(sParts[0], sParts[1]-1, sParts[2], 0, 0, 0);
+                
+                const eParts = endVal.split('-');
+                const endCustom = new Date(eParts[0], eParts[1]-1, eParts[2], 23, 59, 59, 999);
+                
                 if (startCustom > endCustom) {
                     if (isCustomConfirm) alert('开始日期不能晚于结束日期！');
                     return;
                 }
                 currentData = allData.records.filter(r => {
                     const d = parseDate(r.date);
+                    if (isNaN(d.getTime())) return false;
                     return d >= startCustom && d <= endCustom;
                 });
                 displayStr = `${formatDateForDisplay(startCustom)} - ${formatDateForDisplay(endCustom)}`;
@@ -467,7 +494,6 @@
             });
             
             if(currentData.length > 0) {
-                // 修改点：增加 sticky bottom-0 z-20 让总计行吸底，并加上阴影区分边界
                 bodyHtml += `<tr class="bg-blue-50 font-bold sticky bottom-0 z-20 shadow-[0_-2px_5px_rgba(0,0,0,0.05)]"><td class="py-3 px-4 border-t border-blue-200 text-gray-800">总计</td>`;
                 displayUsers.forEach(u => {
                     const totalScore = totals[u.name];
@@ -479,6 +505,68 @@
                 bodyHtml = `<tr><td colspan="${displayUsers.length + 1}" class="py-8 text-gray-400">暂无数据</td></tr>`;
             }
             body.innerHTML = bodyHtml;
+        }
+
+        // ================= 动态加载 html2canvas 并导出长图 =================
+        function exportDashboardToImage() {
+            if (typeof html2canvas === 'undefined') {
+                setLoading(true, '首次使用，正在加载截图组件...');
+                const script = document.createElement('script');
+                // 使用 jsdelivr CDN，相对稳定
+                script.src = 'https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js';
+                script.onload = () => {
+                    executeScreenshot();
+                };
+                script.onerror = () => {
+                    setLoading(false);
+                    alert('截图组件加载失败，请检查网络连接！');
+                };
+                document.body.appendChild(script);
+            } else {
+                executeScreenshot();
+            }
+        }
+
+        function executeScreenshot() {
+            const tableContainer = document.getElementById('dashboardTableContainer');
+            
+            // 记录原始样式
+            const originalMaxHeight = tableContainer.style.maxHeight;
+            const originalOverflow = tableContainer.style.overflow;
+            
+            // 临时移除滚动条限制，让表格完全展开以便截图
+            tableContainer.style.maxHeight = 'none';
+            tableContainer.style.overflow = 'visible';
+            
+            setLoading(true, '正在生成长图，请稍候...');
+
+            // 延迟一小会儿，确保浏览器完成 DOM 展开的渲染
+            setTimeout(() => {
+                html2canvas(tableContainer, {
+                    scale: 2, // 提高清晰度
+                    useCORS: true,
+                    backgroundColor: '#ffffff' // 确保背景是白色而不是透明
+                }).then(canvas => {
+                    // 恢复原始样式
+                    tableContainer.style.maxHeight = originalMaxHeight || '';
+                    tableContainer.style.overflow = originalOverflow || '';
+                    
+                    // 触发下载
+                    const link = document.createElement('a');
+                    const dateStr = formatDateForDisplay(new Date());
+                    link.download = `得分看板_${dateStr}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    
+                    setLoading(false);
+                }).catch(err => {
+                    console.error("截图失败:", err);
+                    tableContainer.style.maxHeight = originalMaxHeight || '';
+                    tableContainer.style.overflow = originalOverflow || '';
+                    setLoading(false);
+                    alert('导出长图失败！');
+                });
+            }, 300);
         }
 
         function renderLeaderboard() {
