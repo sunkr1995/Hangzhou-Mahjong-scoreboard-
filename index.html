@@ -44,9 +44,10 @@
 
         <!-- 导航 Tabs -->
         <div class="flex space-x-4 mb-6 border-b border-gray-200 pb-2">
-            <button class="tab-btn active px-4 py-2 font-semibold text-blue-600 border-b-2 border-blue-600" data-target="dashboard">📊 数据看板 (明细)</button>
+            <button class="tab-btn active px-4 py-2 font-semibold text-blue-600 border-b-2 border-blue-600" data-target="dashboard">📊 数据看板</button>
             <button class="tab-btn px-4 py-2 font-semibold text-gray-500 hover:text-blue-600" data-target="leaderboard">🏅 排行榜</button>
             <button class="tab-btn px-4 py-2 font-semibold text-gray-500 hover:text-blue-600" data-target="userDetails">👤 用户详情</button>
+            <button class="tab-btn px-4 py-2 font-semibold text-gray-500 hover:text-blue-600" data-target="adminPanel">⚙️ 管理员</button>
         </div>
 
         <!-- 模块 1: 数据看板 (Dashboard) -->
@@ -54,13 +55,9 @@
             <div class="overflow-x-auto">
                 <table class="w-full text-center border-collapse">
                     <thead class="bg-gray-100 text-gray-700">
-                        <tr id="dashboardHeader">
-                            <!-- 表头由 JS 动态生成 -->
-                        </tr>
+                        <tr id="dashboardHeader"></tr>
                     </thead>
-                    <tbody id="dashboardBody" class="divide-y divide-gray-200">
-                        <!-- 内容由 JS 动态生成 -->
-                    </tbody>
+                    <tbody id="dashboardBody" class="divide-y divide-gray-200"></tbody>
                 </table>
             </div>
         </div>
@@ -123,6 +120,56 @@
                 </table>
             </div>
         </div>
+
+        <!-- 模块 4: 管理员 (Admin Panel) -->
+        <div id="adminPanel" class="tab-content bg-white rounded-xl shadow-sm p-6">
+            
+            <!-- 用户配置 -->
+            <div class="mb-8">
+                <h2 class="text-xl font-bold mb-4 border-l-4 border-gray-800 pl-2">⚙️ 用户配置 (是否参与排名)</h2>
+                <div id="adminUserConfig" class="flex flex-wrap gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                    <!-- 动态生成复选框 -->
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                <!-- 新增计分 -->
+                <div class="bg-blue-50 p-5 rounded-xl border border-blue-100">
+                    <h2 class="text-xl font-bold mb-4 border-l-4 border-blue-500 pl-2 text-blue-900">➕ 新增单日计分</h2>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">日期 (如 2026.4.20)</label>
+                        <input type="text" id="addRecordDate" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500" placeholder="YYYY.M.D">
+                    </div>
+                    <div id="addRecordInputs" class="grid grid-cols-2 gap-3 mb-4">
+                        <!-- 动态生成得分输入框 -->
+                    </div>
+                    <button onclick="saveNewRecord()" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition">保存新增记录</button>
+                </div>
+
+                <!-- 修改计分 -->
+                <div class="bg-green-50 p-5 rounded-xl border border-green-100">
+                    <h2 class="text-xl font-bold mb-4 border-l-4 border-green-500 pl-2 text-green-900">📝 修改历史计分</h2>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">选择要修改的记录</label>
+                        <select id="editRecordSelect" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-green-500" onchange="loadEditRecordData()"></select>
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-1">修改日期</label>
+                        <input type="text" id="editRecordDate" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-green-500">
+                    </div>
+                    <div id="editRecordInputs" class="grid grid-cols-2 gap-3 mb-4">
+                        <!-- 动态生成得分输入框 -->
+                    </div>
+                    <button onclick="saveEditedRecord()" class="w-full bg-green-600 text-white font-bold py-2 px-4 rounded hover:bg-green-700 transition">保存修改</button>
+                </div>
+            </div>
+
+            <!-- 导出数据 -->
+            <div class="mt-8 pt-6 border-t border-gray-200 text-center">
+                <p class="text-sm text-gray-500 mb-3">修改完成后，请下载最新的配置文件并替换原有的 data.json</p>
+                <button onclick="exportJsonData()" class="bg-gray-800 text-white font-bold py-2 px-6 rounded-lg hover:bg-gray-900 shadow-md transition">⬇️ 下载最新 data.json</button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -135,8 +182,7 @@
                 const response = await fetch('data.json');
                 if (!response.ok) throw new Error('网络响应不正常');
                 allData = await response.json();
-                currentData = allData.records;
-                init();
+                applyTimeFilter(); 
             } catch (error) {
                 console.error("加载 data.json 失败:", error);
                 document.getElementById('globalStats').innerHTML = `<span class="text-red-500">数据加载失败，请确保使用本地服务器运行且 data.json 存在。</span>`;
@@ -150,7 +196,7 @@
             renderAll();
         }
 
-        // 绑定事件 (Tab切换 & 时间筛选)
+        // 绑定事件
         function bindEvents() {
             // Tab 切换逻辑
             document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -168,22 +214,22 @@
             });
 
             // 时间筛选逻辑
-            document.getElementById('timeFilter').addEventListener('change', (e) => {
-                const filter = e.target.value;
-                if (filter === 'all') {
-                    currentData = allData.records;
-                } else if (filter === 'thisMonth') {
-                    // 假设当前是 2026年4月
-                    currentData = allData.records.filter(r => r.date.startsWith('2026.4'));
-                } else if (filter === 'thisWeek') {
-                    // 简易模拟：只取最后两条代表本周
-                    currentData = allData.records.slice(-2);
-                }
-                renderAll();
-            });
-
+            document.getElementById('timeFilter').addEventListener('change', applyTimeFilter);
             // 用户详情下拉框切换
             document.getElementById('userSelect').addEventListener('change', renderUserDetails);
+        }
+
+        // 应用时间筛选并重新渲染
+        function applyTimeFilter() {
+            const filter = document.getElementById('timeFilter').value;
+            if (filter === 'all') {
+                currentData = allData.records;
+            } else if (filter === 'thisMonth') {
+                currentData = allData.records.filter(r => r.date.startsWith('2026.4'));
+            } else if (filter === 'thisWeek') {
+                currentData = allData.records.slice(-2);
+            }
+            init(); // 重新初始化所有视图
         }
 
         // 统一渲染入口
@@ -191,6 +237,7 @@
             renderDashboard();
             renderLeaderboard();
             renderUserDetails();
+            renderAdminPanel(); // 渲染管理员面板
             
             document.getElementById('globalStats').innerText = 
                 `共计 ${allData.users.length} 名用户 | 当前视图包含 ${currentData.length} 场对局记录`;
@@ -210,17 +257,12 @@
             const header = document.getElementById('dashboardHeader');
             const body = document.getElementById('dashboardBody');
             
-            // 1. 生成表头
             let headerHtml = `<th class="py-3 px-4 border-b">日期</th>`;
-            allData.users.forEach(u => {
-                headerHtml += `<th class="py-3 px-4 border-b">${u.name}</th>`;
-            });
+            allData.users.forEach(u => { headerHtml += `<th class="py-3 px-4 border-b">${u.name}</th>`; });
             header.innerHTML = headerHtml;
 
-            // 2. 寻找当前视图中的全局最大正分和最大负分，并初始化总计对象
-            let maxScore = -Infinity;
-            let minScore = Infinity;
-            let totals = {}; // 用于存储每个用户的总分
+            let maxScore = -Infinity, minScore = Infinity;
+            let totals = {}; 
             allData.users.forEach(u => totals[u.name] = 0);
 
             currentData.forEach(record => {
@@ -228,16 +270,11 @@
                     if (score > maxScore) maxScore = score;
                     if (score < minScore) minScore = score;
                 });
-                
-                // 累加每个用户的总分
                 allData.users.forEach(u => {
-                    if (record.scores[u.name] !== undefined) {
-                        totals[u.name] += record.scores[u.name];
-                    }
+                    if (record.scores[u.name] !== undefined) totals[u.name] += record.scores[u.name];
                 });
             });
 
-            // 3. 生成表格内容
             let bodyHtml = '';
             currentData.forEach(record => {
                 bodyHtml += `<tr class="hover:bg-gray-50 transition-colors"><td class="py-3 px-4 border-b font-medium text-gray-600">${record.date}</td>`;
@@ -245,10 +282,8 @@
                     const score = record.scores[u.name];
                     if (score !== undefined) {
                         const styleClass = getScoreClass(score, maxScore, minScore);
-                        const cellStyle = `class="py-3 px-4 border-b"`;
                         const innerSpan = (styleClass.includes('bg-')) ? `<span class="${styleClass} px-2 py-1 rounded shadow-sm">${score > 0 ? '+'+score : score}</span>` : `<span class="${styleClass}">${score > 0 ? '+'+score : score}</span>`;
-                        
-                        bodyHtml += `<td ${cellStyle}>${innerSpan}</td>`;
+                        bodyHtml += `<td class="py-3 px-4 border-b">${innerSpan}</td>`;
                     } else {
                         bodyHtml += `<td class="py-3 px-4 border-b text-gray-300">-</td>`;
                     }
@@ -256,96 +291,64 @@
                 bodyHtml += `</tr>`;
             });
             
-            // 4. 追加“总计”行
             if(currentData.length > 0) {
-                bodyHtml += `<tr class="bg-blue-50/50 font-bold hover:bg-blue-100/50 transition-colors">
-                    <td class="py-3 px-4 border-b text-gray-800">总计</td>`;
-                
+                bodyHtml += `<tr class="bg-blue-50/50 font-bold hover:bg-blue-100/50 transition-colors"><td class="py-3 px-4 border-b text-gray-800">总计</td>`;
                 allData.users.forEach(u => {
                     const totalScore = totals[u.name];
-                    // 总计行只应用红绿字体颜色，不应用极值背景高亮
                     const textClass = totalScore > 0 ? 'text-positive' : totalScore < 0 ? 'text-negative' : 'text-zero';
-                    const displayScore = totalScore > 0 ? '+' + totalScore : totalScore;
-                    
-                    bodyHtml += `<td class="py-3 px-4 border-b ${textClass}">${displayScore}</td>`;
+                    bodyHtml += `<td class="py-3 px-4 border-b ${textClass}">${totalScore > 0 ? '+' + totalScore : totalScore}</td>`;
                 });
                 bodyHtml += `</tr>`;
             } else {
                 bodyHtml = `<tr><td colspan="${allData.users.length + 1}" class="py-8 text-gray-400">暂无数据</td></tr>`;
             }
-            
             body.innerHTML = bodyHtml;
         }
 
         // ================= 模块 2: 渲染排行榜 =================
         function renderLeaderboard() {
             let stats = {};
-            // 初始化参与排名的用户
             allData.users.forEach(u => {
-                if (u.participateInRanking) {
-                    stats[u.name] = { name: u.name, totalScore: 0, matches: 0, wins: 0 };
-                }
+                if (u.participateInRanking) stats[u.name] = { name: u.name, totalScore: 0, matches: 0, wins: 0 };
             });
 
-            // 统计数据 (基于当前时间筛选的数据)
             currentData.forEach(record => {
                 for (const [name, score] of Object.entries(record.scores)) {
                     if (stats[name]) {
                         stats[name].totalScore += score;
                         stats[name].matches += 1;
-                        if (score > 0) stats[name].wins += 1; // 假设得分 > 0 记为胜场
+                        if (score > 0) stats[name].wins += 1; 
                     }
                 }
             });
 
             const statsArray = Object.values(stats);
 
-            // 1. 总分榜渲染 (处理并列排名)
+            // 总分榜
             statsArray.sort((a, b) => b.totalScore - a.totalScore);
             let scoreHtml = '';
             let currentRank = 1;
             for (let i = 0; i < statsArray.length; i++) {
-                if (i > 0 && statsArray[i].totalScore < statsArray[i-1].totalScore) {
-                    currentRank = i + 1;
-                }
+                if (i > 0 && statsArray[i].totalScore < statsArray[i-1].totalScore) currentRank = i + 1;
                 const user = statsArray[i];
                 let rankIcon = currentRank === 1 ? '🥇' : currentRank === 2 ? '🥈' : currentRank === 3 ? '🥉' : currentRank;
                 const scoreClass = user.totalScore > 0 ? 'text-positive' : user.totalScore < 0 ? 'text-negative' : 'text-zero';
-                
-                scoreHtml += `
-                    <tr class="hover:bg-blue-50/50">
-                        <td class="py-3 font-bold text-gray-600">${rankIcon}</td>
-                        <td class="py-3 font-medium">${user.name}</td>
-                        <td class="py-3 ${scoreClass}">${user.totalScore > 0 ? '+'+user.totalScore : user.totalScore}</td>
-                    </tr>`;
+                scoreHtml += `<tr class="hover:bg-blue-50/50"><td class="py-3 font-bold text-gray-600">${rankIcon}</td><td class="py-3 font-medium">${user.name}</td><td class="py-3 ${scoreClass}">${user.totalScore > 0 ? '+'+user.totalScore : user.totalScore}</td></tr>`;
             }
             document.getElementById('scoreRankingBody').innerHTML = scoreHtml;
 
-            // 2. 胜率榜渲染
-            statsArray.forEach(u => {
-                u.winRate = u.matches > 0 ? (u.wins / u.matches) * 100 : 0;
-            });
-            statsArray.sort((a, b) => b.winRate - a.winRate || b.matches - a.matches); // 胜率相同比场次
+            // 胜率榜
+            statsArray.forEach(u => { u.winRate = u.matches > 0 ? (u.wins / u.matches) * 100 : 0; });
+            statsArray.sort((a, b) => b.winRate - a.winRate || b.matches - a.matches); 
             
             let winRateHtml = '';
             currentRank = 1;
             for (let i = 0; i < statsArray.length; i++) {
-                if (i > 0 && statsArray[i].winRate < statsArray[i-1].winRate) {
-                    currentRank = i + 1;
-                }
+                if (i > 0 && statsArray[i].winRate < statsArray[i-1].winRate) currentRank = i + 1;
                 const user = statsArray[i];
                 let rankIcon = currentRank === 1 ? '🥇' : currentRank === 2 ? '🥈' : currentRank === 3 ? '🥉' : currentRank;
-                
-                // 胜率颜色逻辑：>= 50% 红色(positive)，< 50% 绿色(negative)
                 const winRateColorClass = user.winRate >= 50 ? 'text-positive' : 'text-negative';
-                
-                winRateHtml += `
-                    <tr class="hover:bg-green-50/50">
-                        <td class="py-3 font-bold text-gray-600">${rankIcon}</td>
-                        <td class="py-3 font-medium">${user.name}</td>
-                        <td class="py-3 font-bold ${winRateColorClass}">${user.winRate.toFixed(1)}%</td>
-                        <td class="py-3 text-sm text-gray-500">${user.wins} / ${user.matches}</td>
-                    </tr>`;
+                winRateHtml += `<tr class="hover:bg-green-50/50"><td class="py-3 font-bold text-gray-600">${rankIcon}</td><td class="py-3 font-medium">${user.name}</td><td class="py-3 font-bold ${winRateColorClass}">${user.winRate.toFixed(1)}%</td><td class="py-3 text-sm text-gray-500">${user.wins} / ${user.matches}</td></tr>`;
             }
             document.getElementById('winRateRankingBody').innerHTML = winRateHtml;
         }
@@ -353,24 +356,19 @@
         // ================= 模块 3: 渲染用户详情 =================
         function initUserSelect() {
             const select = document.getElementById('userSelect');
+            const currentVal = select.value;
             select.innerHTML = '';
-            allData.users.forEach(u => {
-                select.innerHTML += `<option value="${u.name}">${u.name}</option>`;
-            });
+            allData.users.forEach(u => { select.innerHTML += `<option value="${u.name}">${u.name}</option>`; });
+            if (currentVal && allData.users.find(u => u.name === currentVal)) select.value = currentVal;
         }
 
         function renderUserDetails() {
             const userName = document.getElementById('userSelect').value;
             if (!userName) return;
 
-            let totalScore = 0;
-            let matches = 0;
-            let wins = 0;
-            let detailHtml = '';
-
-            // 寻找该用户的局部极值以便高亮
-            let maxScore = -Infinity;
-            let minScore = Infinity;
+            let totalScore = 0, matches = 0, wins = 0, detailHtml = '';
+            let maxScore = -Infinity, minScore = Infinity;
+            
             currentData.forEach(record => {
                 const score = record.scores[userName];
                 if (score !== undefined) {
@@ -388,35 +386,168 @@
 
                     const styleClass = getScoreClass(score, maxScore, minScore);
                     const innerSpan = (styleClass.includes('bg-')) ? `<span class="${styleClass} px-2 py-1 rounded shadow-sm">${score > 0 ? '+'+score : score}</span>` : `<span class="${styleClass}">${score > 0 ? '+'+score : score}</span>`;
-                    const resultTag = score > 0 ? `<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs">胜</span>` : 
-                                      score < 0 ? `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">负</span>` : 
-                                      `<span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">平</span>`;
+                    const resultTag = score > 0 ? `<span class="bg-red-100 text-red-700 px-2 py-1 rounded text-xs">胜</span>` : score < 0 ? `<span class="bg-green-100 text-green-700 px-2 py-1 rounded text-xs">负</span>` : `<span class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">平</span>`;
 
-                    detailHtml += `
-                        <tr class="hover:bg-gray-50">
-                            <td class="py-3 text-gray-600">${record.date}</td>
-                            <td class="py-3">${innerSpan}</td>
-                            <td class="py-3">${resultTag}</td>
-                        </tr>`;
+                    detailHtml += `<tr class="hover:bg-gray-50"><td class="py-3 text-gray-600">${record.date}</td><td class="py-3">${innerSpan}</td><td class="py-3">${resultTag}</td></tr>`;
                 }
             });
 
             if (matches === 0) detailHtml = `<tr><td colspan="3" class="py-6 text-gray-400">该时间段内无参赛记录</td></tr>`;
-
             document.getElementById('userDetailBody').innerHTML = detailHtml;
             
-            // 总分
             document.getElementById('detailTotalScore').innerText = totalScore > 0 ? '+' + totalScore : totalScore;
             document.getElementById('detailTotalScore').className = `text-2xl font-bold ${totalScore > 0 ? 'text-positive' : totalScore < 0 ? 'text-negative' : 'text-zero'}`;
             
-            // 胜率计算及颜色逻辑：>= 50% 红色(positive)，< 50% 绿色(negative)
             const winRateNum = matches > 0 ? (wins / matches) * 100 : 0;
-            const detailWinRateEl = document.getElementById('detailWinRate');
-            detailWinRateEl.innerText = winRateNum.toFixed(1) + '%';
-            detailWinRateEl.className = `text-2xl font-bold ${winRateNum >= 50 ? 'text-positive' : 'text-negative'}`;
-            
-            // 场次
+            document.getElementById('detailWinRate').innerText = winRateNum.toFixed(1) + '%';
+            document.getElementById('detailWinRate').className = `text-2xl font-bold ${winRateNum >= 50 ? 'text-positive' : 'text-negative'}`;
             document.getElementById('detailMatches').innerText = matches;
+        }
+
+        // ================= 模块 4: 管理员面板功能 =================
+        function renderAdminPanel() {
+            // 1. 渲染用户配置 (是否参与排名)
+            const configDiv = document.getElementById('adminUserConfig');
+            configDiv.innerHTML = '';
+            allData.users.forEach((u, index) => {
+                configDiv.innerHTML += `
+                    <label class="flex items-center space-x-2 cursor-pointer bg-white px-3 py-2 rounded shadow-sm border border-gray-100">
+                        <input type="checkbox" class="form-checkbox h-5 w-5 text-blue-600" 
+                            ${u.participateInRanking ? 'checked' : ''} 
+                            onchange="toggleUserRanking(${index}, this.checked)">
+                        <span class="text-gray-700 font-medium">${u.name}</span>
+                    </label>
+                `;
+            });
+
+            // 2. 渲染新增计分输入框
+            const addInputsDiv = document.getElementById('addRecordInputs');
+            addInputsDiv.innerHTML = '';
+            allData.users.forEach(u => {
+                addInputsDiv.innerHTML += `
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">${u.name} 得分</label>
+                        <input type="number" id="add_score_${u.name}" class="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-blue-500" placeholder="留空代表未参赛">
+                    </div>
+                `;
+            });
+
+            // 3. 渲染修改计分下拉框
+            const editSelect = document.getElementById('editRecordSelect');
+            editSelect.innerHTML = '<option value="">-- 请选择要修改的记录 --</option>';
+            allData.records.forEach((r, index) => {
+                editSelect.innerHTML += `<option value="${index}">${r.date} (共 ${Object.keys(r.scores).length} 人参赛)</option>`;
+            });
+            
+            // 渲染修改计分输入框 (初始为空)
+            const editInputsDiv = document.getElementById('editRecordInputs');
+            editInputsDiv.innerHTML = '';
+            allData.users.forEach(u => {
+                editInputsDiv.innerHTML += `
+                    <div>
+                        <label class="block text-xs text-gray-500 mb-1">${u.name} 得分</label>
+                        <input type="number" id="edit_score_${u.name}" class="w-full border border-gray-300 rounded px-2 py-1 text-sm focus:ring-2 focus:ring-green-500" placeholder="留空代表未参赛" disabled>
+                    </div>
+                `;
+            });
+        }
+
+        // 切换用户排名状态
+        function toggleUserRanking(userIndex, isParticipating) {
+            allData.users[userIndex].participateInRanking = isParticipating;
+            applyTimeFilter(); // 重新计算并渲染
+        }
+
+        // 保存新增记录
+        function saveNewRecord() {
+            const date = document.getElementById('addRecordDate').value.trim();
+            if (!date) return alert('请输入日期！');
+
+            let newScores = {};
+            let hasData = false;
+            allData.users.forEach(u => {
+                const val = document.getElementById(`add_score_${u.name}`).value;
+                if (val !== '') {
+                    newScores[u.name] = parseInt(val, 10);
+                    hasData = true;
+                }
+            });
+
+            if (!hasData) return alert('请至少输入一名用户的得分！');
+
+            allData.records.push({ date: date, scores: newScores });
+            
+            // 清空输入框
+            document.getElementById('addRecordDate').value = '';
+            allData.users.forEach(u => document.getElementById(`add_score_${u.name}`).value = '');
+            
+            alert('新增记录成功！');
+            applyTimeFilter(); // 刷新视图
+        }
+
+        // 加载选中的记录到修改面板
+        function loadEditRecordData() {
+            const index = document.getElementById('editRecordSelect').value;
+            if (index === '') {
+                document.getElementById('editRecordDate').value = '';
+                allData.users.forEach(u => {
+                    const input = document.getElementById(`edit_score_${u.name}`);
+                    input.value = '';
+                    input.disabled = true;
+                });
+                return;
+            }
+
+            const record = allData.records[index];
+            document.getElementById('editRecordDate').value = record.date;
+            
+            allData.users.forEach(u => {
+                const input = document.getElementById(`edit_score_${u.name}`);
+                input.disabled = false;
+                if (record.scores[u.name] !== undefined) {
+                    input.value = record.scores[u.name];
+                } else {
+                    input.value = '';
+                }
+            });
+        }
+
+        // 保存修改的记录
+        function saveEditedRecord() {
+            const index = document.getElementById('editRecordSelect').value;
+            if (index === '') return alert('请先选择要修改的记录！');
+
+            const date = document.getElementById('editRecordDate').value.trim();
+            if (!date) return alert('日期不能为空！');
+
+            let updatedScores = {};
+            allData.users.forEach(u => {
+                const val = document.getElementById(`edit_score_${u.name}`).value;
+                if (val !== '') {
+                    updatedScores[u.name] = parseInt(val, 10);
+                }
+            });
+
+            allData.records[index].date = date;
+            allData.records[index].scores = updatedScores;
+
+            alert('修改记录成功！');
+            applyTimeFilter(); // 刷新视图
+        }
+
+        // 导出最新的 JSON 数据
+        function exportJsonData() {
+            const dataStr = JSON.stringify(allData, null, 2);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'data.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         // 启动应用
