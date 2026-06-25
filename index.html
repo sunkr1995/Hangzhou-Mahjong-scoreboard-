@@ -123,6 +123,8 @@
                 <label class="font-medium text-gray-700">选择用户查看:</label>
                 <select id="userSelect" class="border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-blue-500"></select>
             </div>
+            
+            <!-- 基础统计 -->
             <div class="grid grid-cols-3 gap-4 mb-6">
                 <div class="bg-blue-50 p-4 rounded-lg text-center">
                     <div class="text-sm text-gray-500">累计总分</div><div class="text-2xl font-bold text-blue-600" id="detailTotalScore">-</div>
@@ -132,6 +134,32 @@
                 </div>
                 <div class="bg-purple-50 p-4 rounded-lg text-center">
                     <div class="text-sm text-gray-500">参赛场次</div><div class="text-2xl font-bold text-purple-600" id="detailMatches">-</div>
+                </div>
+            </div>
+
+            <!-- 新增：关系羁绊 (克星/提款机) -->
+            <div id="nemesisContainer" class="hidden grid grid-cols-2 gap-4 mb-6">
+                <!-- 克星 -->
+                <div class="bg-red-50 border border-red-100 p-4 rounded-lg flex items-center justify-between shadow-sm">
+                    <div>
+                        <div class="text-sm text-red-600 font-bold mb-1">😈 带负之人</div>
+                        <div class="text-xs text-gray-500">该玩家输分时，TA赢最多</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xl font-bold text-red-600" id="nemesisUser">-</div>
+                        <div class="text-sm text-red-400 font-medium" id="nemesisScore">-</div>
+                    </div>
+                </div>
+                <!-- 提款机 -->
+                <div class="bg-green-50 border border-green-100 p-4 rounded-lg flex items-center justify-between shadow-sm">
+                    <div>
+                        <div class="text-sm text-green-600 font-bold mb-1">😇 带福之人</div>
+                        <div class="text-xs text-gray-500">该玩家赢分时，TA输最多</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-xl font-bold text-green-600" id="atmUser">-</div>
+                        <div class="text-sm text-green-500 font-medium" id="atmScore">-</div>
+                    </div>
                 </div>
             </div>
 
@@ -198,7 +226,7 @@
                         <h2 class="text-xl font-bold mb-4 border-l-4 border-blue-500 pl-2 text-blue-900">➕ 新增单日计分</h2>
                         <div class="mb-4">
                             <label class="block text-sm font-medium text-gray-700 mb-1">日期 (如 2026.4.20)</label>
-                            <input type="text" id="addRecordDate" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500" placeholder="YYYY.M.D">
+                            <input type="date" id="addRecordDate" class="w-full border border-gray-300 rounded px-3 py-2 focus:ring-2 focus:ring-blue-500">
                         </div>
                         <div id="addRecordInputs" class="grid grid-cols-2 gap-3 mb-4"></div>
                         <button onclick="saveNewRecord()" class="w-full bg-blue-600 text-white font-bold py-2 px-4 rounded hover:bg-blue-700 transition shadow-sm">保存新增并同步</button>
@@ -395,7 +423,6 @@
                 displayStr = `${formatDateForDisplay(startCustom)} - ${formatDateForDisplay(endCustom)}`;
             }
             
-            // 【核心修改】将筛选后的数据按日期倒序排列（最新的日期在最前面）
             currentData.sort((a, b) => parseDate(b.date) - parseDate(a.date));
 
             document.getElementById('currentDateRangeDisplay').innerText = `当前区间: ${displayStr}`;
@@ -495,7 +522,6 @@
 
             let bodyHtml = '';
             
-            // 【核心修改】将总计行放在最上面，紧贴表头
             if(currentData.length > 0) {
                 bodyHtml += `<tr class="bg-blue-50 font-bold border-b-2 border-blue-200"><td class="py-3 px-4 text-gray-800">总计</td>`;
                 displayUsers.forEach(u => {
@@ -506,7 +532,6 @@
                 bodyHtml += `</tr>`;
             }
 
-            // 之后再遍历渲染明细数据（数据已经是倒序的了）
             currentData.forEach(record => {
                 bodyHtml += `<tr class="hover:bg-gray-50 transition-colors"><td class="py-3 px-4 border-b border-gray-200 font-medium text-gray-600">${record.date}</td>`;
                 displayUsers.forEach(u => {
@@ -529,7 +554,6 @@
             body.innerHTML = bodyHtml;
         }
 
-        // ================= 动态加载 html2canvas 并导出长图 =================
         function exportDashboardToImage() {
             if (typeof html2canvas === 'undefined') {
                 setLoading(true, '首次使用，正在加载截图组件...');
@@ -637,6 +661,69 @@
             if (currentVal && allData.users.find(u => u.name === currentVal)) select.value = currentVal;
         }
 
+        // ================= 新增：分析克星与提款机 =================
+        function analyzeUserNemesis(records, targetUser) {
+            const validUsers = new Set();
+            allData.users.forEach(user => {
+                if (user.participateInRanking) {
+                    validUsers.add(user.name);
+                }
+            });
+
+            const posScoresWhenTargetNeg = {};
+            const negScoresWhenTargetPos = {};
+
+            records.forEach(record => {
+                const scores = record.scores;
+                
+                // 如果目标用户没有参与这一局，或者目标用户本身不参与排名，跳过
+                if (scores[targetUser] === undefined || !validUsers.has(targetUser)) return;
+
+                const targetScore = scores[targetUser];
+
+                if (targetScore < 0) {
+                    // 目标用户负分，统计其他参与排名的人的正分
+                    for (const [user, score] of Object.entries(scores)) {
+                        if (user !== targetUser && score > 0 && validUsers.has(user)) {
+                            posScoresWhenTargetNeg[user] = (posScoresWhenTargetNeg[user] || 0) + score;
+                        }
+                    }
+                } else if (targetScore > 0) {
+                    // 目标用户正分，统计其他参与排名的人的负分
+                    for (const [user, score] of Object.entries(scores)) {
+                        if (user !== targetUser && score < 0 && validUsers.has(user)) {
+                            negScoresWhenTargetPos[user] = (negScoresWhenTargetPos[user] || 0) + score;
+                        }
+                    }
+                }
+            });
+
+            // 找出正分最多的用户 (克星)
+            let maxPosUser = null;
+            let maxPosScore = 0;
+            for (const [user, score] of Object.entries(posScoresWhenTargetNeg)) {
+                if (score > maxPosScore) {
+                    maxPosScore = score;
+                    maxPosUser = user;
+                }
+            }
+
+            // 找出负分最多（数值最小）的用户 (提款机)
+            let maxNegUser = null;
+            let maxNegScore = 0;
+            for (const [user, score] of Object.entries(negScoresWhenTargetPos)) {
+                if (score < maxNegScore) {
+                    maxNegScore = score;
+                    maxNegUser = user;
+                }
+            }
+
+            return {
+                nemesis: maxPosUser ? { user: maxPosUser, score: maxPosScore } : null,
+                atm: maxNegUser ? { user: maxNegUser, score: maxNegScore } : null
+            };
+        }
+
         function renderUserDetails() {
             const userName = document.getElementById('userSelect').value;
             if (!userName) return;
@@ -647,7 +734,6 @@
             let totalScore = 0, matches = 0, wins = 0, detailHtml = '';
             let maxScore = -Infinity, minScore = Infinity;
             
-            // 用于图表的数据收集
             let chartLabels = [];
             let chartScores = [];
 
@@ -668,7 +754,6 @@
                     matches += 1;
                     if (score > 0) wins += 1;
 
-                    // 收集图表数据 (因为 currentData 是倒序的，所以这里收集到的是从新到老的数据)
                     chartLabels.push(record.date);
                     chartScores.push(score);
 
@@ -691,11 +776,38 @@
             document.getElementById('detailWinRate').className = `text-2xl font-bold ${winRateNum >= 50 ? 'text-positive' : 'text-negative'}`;
             document.getElementById('detailMatches').innerText = matches;
 
+            // 渲染羁绊关系 (克星/提款机)
+            const nemesisContainer = document.getElementById('nemesisContainer');
+            if (isParticipating && matches > 0) {
+                nemesisContainer.classList.remove('hidden');
+                // 传入 currentData 实现了基于时间筛选的计算
+                const nemesisStats = analyzeUserNemesis(currentData, userName);
+                
+                if (nemesisStats.nemesis) {
+                    document.getElementById('nemesisUser').innerText = nemesisStats.nemesis.user;
+                    document.getElementById('nemesisScore').innerText = `+${nemesisStats.nemesis.score}`;
+                } else {
+                    document.getElementById('nemesisUser').innerText = '无';
+                    document.getElementById('nemesisScore').innerText = '-';
+                }
+
+                if (nemesisStats.atm) {
+                    document.getElementById('atmUser').innerText = nemesisStats.atm.user;
+                    document.getElementById('atmScore').innerText = `${nemesisStats.atm.score}`;
+                } else {
+                    document.getElementById('atmUser').innerText = '无';
+                    document.getElementById('atmScore').innerText ='-';
+                }
+            } else {
+                // 如果不参与排名或没有比赛记录，隐藏该模块
+                nemesisContainer.classList.add('hidden');
+            }
+
             // 渲染图表
             const chartContainer = document.getElementById('chartContainer');
             if (chartLabels.length > 0) {
                 chartContainer.classList.remove('hidden');
-                // 【核心修改】将倒序的数据翻转回来，确保图表是从左到右按时间顺序（老 -> 新）绘制
+                // 将倒序的数据翻转回来，确保图表是从左到右按时间顺序（老 -> 新）绘制
                 renderUserScoreChart(chartLabels.reverse(), chartScores.reverse());
             } else {
                 chartContainer.classList.add('hidden');
@@ -922,3 +1034,4 @@
     </script>
 </body>
 </html>
+
