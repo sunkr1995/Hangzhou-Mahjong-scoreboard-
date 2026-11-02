@@ -8,6 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- 引入 Chart.js 用于绘制美观的折线图 -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
     <style>
         .tab-content { display: none; animation: fadeIn 0.3s ease-in-out; }
         .tab-content.active { display: block; }
@@ -170,6 +172,35 @@
                     <canvas id="userScoreChart"></canvas>
                 </div>
             </div>
+
+            <!-- 新增：累计积分日 K 线 -->
+            <div id="klineContainer"
+                class="hidden mb-8 bg-white p-5 rounded-xl border border-gray-100 shadow-sm">
+
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+                    <h3 class="font-bold text-lg border-l-4 border-red-500 pl-2 text-gray-800">
+                        🕯️ 累计积分日 K 线
+                    </h3>
+
+                    <button type="button"
+                            onclick="exportUserKlineImage()"
+                            class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition">
+                        📸 导出 K 线图
+                    </button>
+                </div>
+
+                <p class="text-xs text-gray-500 leading-relaxed mb-3">
+                    红涨绿跌，每个参赛日一根 K 线；所选时间区间累计积分从 0 开始。
+                    最高、最低仅取开盘与收盘端点，不代表真实日内极值。
+                </p>
+
+                <div id="userKlineSummary"
+                    class="text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2 mb-3">
+                </div>
+
+                <div id="userKlineChart" class="w-full" style="height: 420px;"></div>
+            </div>
+
 
             <h3 class="font-bold text-lg mb-3 border-l-4 border-gray-400 pl-2">参赛记录明细</h3>
             <div class="overflow-x-auto overflow-y-auto max-h-[50vh] border border-gray-100 rounded-lg">
@@ -812,6 +843,8 @@
             } else {
                 chartContainer.classList.add('hidden');
             }
+            // 新增：累计积分日 K 线
+            renderUserKlineChart(userName);
         }
 
         // ================= 绘制折线图的核心逻辑 =================
@@ -1028,6 +1061,348 @@
             } else {
                 allData.records[index] = oldRecord; 
             }
+        }
+
+        // ================= 新增：累计积分日 K 线 =================
+
+        let userKlineChartInstance = null;
+
+        // 统一生成日期键，兼容原页面 parseDate() 支持的日期格式。
+        // 不使用 toISOString()，避免本地日期因时区转换而偏移。
+        function getKlineDateKey(dateStr) {
+            const date = parseDate(dateStr);
+
+            if (isNaN(date.getTime())) return null;
+
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+
+            return `${year}-${month}-${day}`;
+        }
+
+        // 将所选区间内的个人积分转换为每日累计积分 K 线。
+        function buildUserKlineData(records, userName) {
+            const dailyScores = new Map();
+
+            records.forEach(record => {
+                if (
+                    !record.scores ||
+                    !Object.prototype.hasOwnProperty.call(
+                        record.scores,
+                        userName
+                    )
+                ) {
+                    return;
+                }
+
+                const score = record.scores[userName];
+                const date = getKlineDateKey(record.date);
+
+                if (
+                    !date ||
+                    typeof score !== 'number' ||
+                    !Number.isFinite(score)
+                ) {
+                    return;
+                }
+
+                // 同一天多条记录合并为当天总变化。
+                dailyScores.set(
+                    date,
+                    (dailyScores.get(date) ?? 0) + score
+                );
+            });
+
+            // 使用升序绘制，不改变 currentData 原有的倒序。
+            const dates = [...dailyScores.keys()].sort();
+
+            // 所选区间从 0 开始，与详情中的区间总分保持一致。
+            let cumulativeScore = 0;
+
+            return dates.map(date => {
+                const change = dailyScores.get(date);
+                const open = cumulativeScore;
+                const close = open + change;
+
+                cumulativeScore = close;
+
+                return {
+                    date,
+                    change,
+                    open,
+                    close,
+                    low: Math.min(open, close),
+                    high: Math.max(open, close)
+                };
+            });
+        }
+
+        function formatKlineScore(value) {
+            return value > 0 ? `+${value}` : String(value);
+        }
+
+        function renderUserKlineChart(userName) {
+            const container = document.getElementById('klineContainer');
+            const summary = document.getElementById('userKlineSummary');
+
+            const candles = buildUserKlineData(currentData, userName);
+
+            if (candles.length === 0) {
+                container.classList.add('hidden');
+                summary.textContent = '';
+
+                if (userKlineChartInstance) {
+                    userKlineChartInstance.clear();
+                }
+
+                return;
+            }
+
+            container.classList.remove('hidden');
+
+            const lastCandle = candles[candles.length - 1];
+
+            summary.textContent =
+                `${userName}｜参赛天数：${candles.length}` +
+                `｜区间累计积分：${formatKlineScore(lastCandle.close)}` +
+                `｜${candles[0].date} 至 ${lastCandle.date}`;
+
+            if (typeof echarts === 'undefined') {
+                summary.textContent = 'K 线组件加载失败，请检查网络后刷新页面。';
+                return;
+            }
+
+            if (!userKlineChartInstance) {
+                userKlineChartInstance = echarts.init(
+                    document.getElementById('userKlineChart')
+                );
+            }
+
+            userKlineChartInstance.setOption({
+                animation: false,
+
+                title: {
+                    text: `${userName} · 累计积分日 K`,
+                    left: 'center',
+                    top: 8,
+                    textStyle: {
+                        fontSize: 16,
+                        color: '#374151'
+                    }
+                },
+
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: {
+                        type: 'cross'
+                    },
+
+                    // 使用富文本而非 HTML，避免把用户名解析为 HTML。
+                    renderMode: 'richText',
+                    backgroundColor: 'rgba(17, 24, 39, 0.94)',
+                    borderWidth: 0,
+                    textStyle: {
+                        color: '#ffffff',
+                        fontSize: 13
+                    },
+
+                    formatter(params) {
+                        const item = params.find(
+                            p => p.seriesType === 'candlestick'
+                        );
+
+                        if (!item) return '';
+
+                        const candle = candles[item.dataIndex];
+
+                        return [
+                            `${userName}  ${candle.date}`,
+                            `当日积分：${formatKlineScore(candle.change)}`,
+                            `开盘累计：${formatKlineScore(candle.open)}`,
+                            `收盘累计：${formatKlineScore(candle.close)}`,
+                            `最高端点：${formatKlineScore(candle.high)}`,
+                            `最低端点：${formatKlineScore(candle.low)}`
+                        ].join('\n');
+                    }
+                },
+
+                grid: {
+                    left: 20,
+                    right: 25,
+                    top: 75,
+                    bottom: 75,
+                    containLabel: true
+                },
+
+                xAxis: {
+                    type: 'category',
+                    data: candles.map(candle => candle.date),
+                    boundaryGap: true,
+                    axisLine: {
+                        lineStyle: {
+                            color: '#d1d5db'
+                        }
+                    },
+                    axisTick: {
+                        show: false
+                    },
+                    axisLabel: {
+                        color: '#6b7280',
+                        hideOverlap: true
+                    }
+                },
+
+                yAxis: {
+                    type: 'value',
+                    name: '累计积分',
+                    scale: true,
+                    axisLabel: {
+                        color: '#6b7280'
+                    },
+                    splitLine: {
+                        lineStyle: {
+                            color: '#f3f4f6'
+                        }
+                    }
+                },
+
+                dataZoom: [
+                    {
+                        type: 'inside',
+                        xAxisIndex: 0,
+                        start: 0,
+                        end: 100
+                    },
+                    {
+                        type: 'slider',
+                        xAxisIndex: 0,
+                        bottom: 12,
+                        height: 24,
+                        start: 0,
+                        end: 100,
+                        borderColor: '#e5e7eb',
+                        fillerColor: 'rgba(59, 130, 246, 0.12)'
+                    }
+                ],
+
+                series: [
+                    {
+                        name: '累计积分',
+                        type: 'candlestick',
+                        barMaxWidth: 22,
+
+                        // ECharts K 线数组的顺序必须为：
+                        // [开盘, 收盘, 最低, 最高]
+                        data: candles.map(candle => [
+                            candle.open,
+                            candle.close,
+                            candle.low,
+                            candle.high
+                        ]),
+
+                        itemStyle: {
+                            color: '#ef4444',
+                            color0: '#22c55e',
+                            borderColor: '#ef4444',
+                            borderColor0: '#22c55e',
+                            borderColorDoji: '#9ca3af',
+                            borderWidth: 1
+                        },
+
+                        markLine: {
+                            silent: true,
+                            symbol: ['none', 'none'],
+                            label: {
+                                show: false
+                            },
+                            lineStyle: {
+                                color: '#9ca3af',
+                                type: 'dashed'
+                            },
+                            data: [
+                                { yAxis: 0 }
+                            ]
+                        }
+                    }
+                ]
+            }, true);
+
+            // 当详情 Tab 可见时，刷新图表尺寸。
+            requestAnimationFrame(resizeUserDetailCharts);
+        }
+
+        // 刷新详情页面的两个图表尺寸。
+        // 原页面在隐藏 Tab 中也会渲染图表，显示后需要重新测量。
+        function resizeUserDetailCharts() {
+            const details = document.getElementById('userDetails');
+
+            if (!details || !details.classList.contains('active')) return;
+
+            const lineContainer = document.getElementById('chartContainer');
+
+            if (
+                userScoreChartInstance &&
+                lineContainer &&
+                !lineContainer.classList.contains('hidden')
+            ) {
+                userScoreChartInstance.resize();
+            }
+
+            const klineContainer = document.getElementById('klineContainer');
+
+            if (
+                userKlineChartInstance &&
+                klineContainer &&
+                !klineContainer.classList.contains('hidden')
+            ) {
+                userKlineChartInstance.resize();
+            }
+        }
+
+        // 使用事件委托兼容原 bindEvents() 中替换 Tab 按钮的逻辑。
+        document.addEventListener('click', event => {
+            const button = event.target.closest(
+                '.tab-btn[data-target="userDetails"]'
+            );
+
+            if (button) {
+                requestAnimationFrame(resizeUserDetailCharts);
+            }
+        });
+
+        window.addEventListener('resize', resizeUserDetailCharts);
+
+        // 导出当前可见范围的 K 线图。
+        function exportUserKlineImage() {
+            const container = document.getElementById('klineContainer');
+
+            if (
+                !userKlineChartInstance ||
+                container.classList.contains('hidden')
+            ) {
+                alert('暂无可导出的 K 线数据。');
+                return;
+            }
+
+            resizeUserDetailCharts();
+
+            const userName = document.getElementById('userSelect').value;
+            const link = document.createElement('a');
+
+            // 替换文件名中的特殊字符。
+            const safeName = userName.replace(/[\\/:*?"<>|]/g, '_');
+
+            link.download =
+                `${safeName}_积分日K_${formatDateForDisplay(new Date())}.png`;
+
+            link.href = userKlineChartInstance.getDataURL({
+                type: 'png',
+                pixelRatio: 2,
+                backgroundColor: '#ffffff'
+            });
+
+            link.click();
         }
 
         loadData();
